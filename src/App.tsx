@@ -1,51 +1,50 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import "./App.css"
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="flex items-center gap-2 px-4 py-3">
+          <span className="font-semibold text-sm group-data-[collapsible=icon]:hidden">
+            Combo Recorder
+          </span>
+        </SidebarHeader>
+        <SidebarContent />
+        <SidebarFooter className="p-2">
+          <div className="text-xs text-muted-foreground px-2 group-data-[collapsible=icon]:hidden">
+            Settings
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset>
+        <header className="flex items-center gap-3 border-b px-4 h-12 shrink-0">
+          <SidebarTrigger />
+          <Separator orientation="vertical" className="h-5" />
+          <div className="flex items-center gap-2">
+            {/* Action buttons placeholder */}
+            <span className="text-xs text-muted-foreground">Toolbar</span>
+          </div>
+        </header>
+        <main className="flex-1 flex items-center justify-center p-4">
+          <span className="text-muted-foreground text-sm">Main content</span>
+        </main>
+        <footer className="flex items-center justify-between h-8 px-4 border-t text-xs text-muted-foreground shrink-0">
+          <span>Ready</span>
+          <span>v0.1.0</span>
+        </footer>
+      </SidebarInset>
+    </SidebarProvider>
+  )
 }
 
-export default App;
+export default App
