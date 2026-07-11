@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use enigo::{Button, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, State};
 
@@ -58,6 +58,7 @@ pub enum SkillStep {
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillConfig {
+    hold_right_click: bool,
     steps: Vec<SkillStep>,
     repeat_mode: String,
     repeat_count: u64,
@@ -224,6 +225,12 @@ pub fn start_skills(config: SkillConfig, app: AppHandle, state: State<'_, AppSta
         let mut enigo = Enigo::new(&Settings::default()).ok();
         let mut cycle: u64 = 0;
 
+        if config.hold_right_click {
+            if let Some(enigo) = enigo.as_mut() {
+                let _ = enigo.button(Button::Right, Direction::Press);
+            }
+        }
+
         while running.load(Ordering::SeqCst) {
             for step in &steps {
                 if !running.load(Ordering::SeqCst) {
@@ -263,6 +270,9 @@ pub fn start_skills(config: SkillConfig, app: AppHandle, state: State<'_, AppSta
         }
 
         if let Some(enigo) = enigo.as_mut() {
+            if config.hold_right_click {
+                let _ = enigo.button(Button::Right, Direction::Release);
+            }
             release_skill_keys(enigo, &steps);
         }
     });
@@ -357,6 +367,12 @@ fn start_skills_inner(config: &SkillConfig, app: &AppHandle, state: &AppState) {
         let mut enigo = Enigo::new(&Settings::default()).ok();
         let mut cycle: u64 = 0;
 
+        if config.hold_right_click {
+            if let Some(enigo) = enigo.as_mut() {
+                let _ = enigo.button(Button::Right, Direction::Press);
+            }
+        }
+
         while running.load(Ordering::SeqCst) {
             for step in &steps {
                 if !running.load(Ordering::SeqCst) {
@@ -396,6 +412,9 @@ fn start_skills_inner(config: &SkillConfig, app: &AppHandle, state: &AppState) {
         }
 
         if let Some(enigo) = enigo.as_mut() {
+            if config.hold_right_click {
+                let _ = enigo.button(Button::Right, Direction::Release);
+            }
             release_skill_keys(enigo, &steps);
         }
     });

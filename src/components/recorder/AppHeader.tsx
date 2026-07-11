@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes"
-import { Download, Moon, RotateCcw, Sun, Upload } from "lucide-react"
+import { FolderOpen, Moon, RotateCcw, Save, SaveAll, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -23,19 +23,21 @@ import { formatElapsed } from "@/lib/settings"
 type AppHeaderProps = {
   running: boolean
   elapsed: number
-  activations: number
+  fileName: string | null
   onReset: () => void
-  onExport: () => void
-  onImport: () => void
+  onOpen: () => void
+  onSave: () => void
+  onSaveAs: () => void
 }
 
 export function AppHeader({
   running,
   elapsed,
-  activations,
+  fileName,
   onReset,
-  onExport,
-  onImport,
+  onOpen,
+  onSave,
+  onSaveAs,
 }: AppHeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
@@ -45,17 +47,15 @@ export function AppHeader({
         <span className="font-heading text-base font-semibold">
           Configuration
         </span>
+        <span className="text-xs text-muted-foreground">
+          {fileName ? fileName.split(/[\\/]/).pop() : "Untitled"}
+        </span>
         <Badge variant={running ? "default" : "secondary"} className="gap-1.5">
           <span
             className={`size-2 rounded-full ${running ? "bg-green-500" : "bg-muted-foreground"}`}
           />
           {running ? `Running · ${formatElapsed(elapsed)}` : "Stopped"}
         </Badge>
-        {running && (
-          <span className="text-xs text-muted-foreground">
-            {activations} activations
-          </span>
-        )}
       </div>
       <div className="flex items-center gap-1">
         <Tooltip>
@@ -64,14 +64,14 @@ export function AppHeader({
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label="Import profile"
-                onClick={onImport}
+                aria-label="Open file"
+                onClick={onOpen}
               >
-                <Upload className="size-4" />
+                <FolderOpen className="size-4" />
               </Button>
             }
           />
-          <TooltipContent>Import profile</TooltipContent>
+          <TooltipContent>Open…</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -79,14 +79,29 @@ export function AppHeader({
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label="Export profile"
-                onClick={onExport}
+                aria-label="Save"
+                onClick={onSave}
               >
-                <Download className="size-4" />
+                <Save className="size-4" />
               </Button>
             }
           />
-          <TooltipContent>Export profile</TooltipContent>
+          <TooltipContent>Save</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Save as"
+                onClick={onSaveAs}
+              >
+                <SaveAll className="size-4" />
+              </Button>
+            }
+          />
+          <TooltipContent>Save As…</TooltipContent>
         </Tooltip>
         <AlertDialog>
           <AlertDialogTrigger

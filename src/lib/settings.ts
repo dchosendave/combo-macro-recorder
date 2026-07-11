@@ -4,6 +4,7 @@ export const STORAGE_KEY = "combo-macro-settings"
 
 export type PotionKey = "q" | "w" | "e" | "r"
 export type RepeatMode = "loop" | "count"
+export type StepLabelStyle = "abbreviation" | "icon"
 
 export type SkillStep =
   | { id: string; type: "keydown"; key: string }
@@ -21,87 +22,130 @@ export type PotionConfig = {
 
 export type SkillConfig = {
   enabled: boolean
+  holdRightClick: boolean
   steps: SkillStep[]
+  labelStyle: StepLabelStyle
   repeatMode: RepeatMode
   repeatCount: string
 }
 
-export type SettingsV2 = {
-  version: 2
+export type Profile = {
+  id: string
+  name: string
+  hotkey: string
   potions: PotionConfig
   skills: SkillConfig
-  hotkey: string
 }
 
-export const DEFAULTS: SettingsV2 = {
-  version: 2,
-  potions: {
-    enabled: false,
-    keys: { q: true, w: true, e: true, r: true },
-    customDelay: false,
-    delayMs: String(MIN_DELAY),
-    repeatMode: "loop",
-    repeatCount: "1",
-  },
-  skills: {
-    enabled: false,
-    steps: [],
-    repeatMode: "loop",
-    repeatCount: "1",
-  },
-  hotkey: "F5",
+export type SettingsV3 = {
+  version: 3
+  activeProfileId: string
+  profiles: Profile[]
 }
 
-function migrateFromV1(parsed: Record<string, unknown>): SettingsV2 {
+function defaultProfile(): Profile {
   return {
-    version: 2,
+    id: crypto.randomUUID(),
+    name: "Untitled",
+    hotkey: "F5",
     potions: {
-      enabled: Boolean(parsed.autoPotions),
-      keys: {
-        ...DEFAULTS.potions.keys,
-        ...((parsed.keys as Record<string, boolean>) ?? {}),
-      },
-      customDelay: Boolean(parsed.customDelay),
-      delayMs: String(parsed.delayMs ?? DEFAULTS.potions.delayMs),
-      repeatMode: (parsed.repeatMode as RepeatMode) ?? DEFAULTS.potions.repeatMode,
-      repeatCount: String(parsed.repeatCount ?? DEFAULTS.potions.repeatCount),
+      enabled: false,
+      keys: { q: true, w: true, e: true, r: true },
+      customDelay: false,
+      delayMs: String(MIN_DELAY),
+      repeatMode: "loop",
+      repeatCount: "1",
     },
-    skills: DEFAULTS.skills,
-    hotkey: String(parsed.hotkey ?? DEFAULTS.hotkey),
+    skills: {
+      enabled: false,
+      holdRightClick: false,
+      steps: [],
+      labelStyle: "abbreviation",
+      repeatMode: "loop",
+      repeatCount: "1",
+    },
   }
 }
 
-export function loadSettings(): SettingsV2 {
+export function makeDefaultSettings(): SettingsV3 {
+  const profile = defaultProfile()
+  return {
+    version: 3,
+    activeProfileId: profile.id,
+    profiles: [profile],
+  }
+}
+
+export const DEFAULTS = makeDefaultSettings()
+
+function profileFromV2(potions: PotionConfig, skills: SkillConfig, hotkey: string): Profile {
+  return {
+    id: crypto.randomUUID(),
+    name: "Untitled",
+    hotkey,
+    potions,
+    skills,
+  }
+}
+
+export function loadSettings(): SettingsV3 {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULTS
     const parsed = JSON.parse(raw)
-    if (parsed?.version === 2) {
+
+    // V3
+    if (parsed?.version === 3) {
+      const profiles: Profile[] = Array.isArray(parsed.profiles) ? parsed.profiles : []
       return {
-        potions: {
-          ...DEFAULTS.potions,
-          ...parsed.potions,
-          keys: {
-            ...DEFAULTS.potions.keys,
-            ...(parsed.potions?.keys ?? {}),
-          },
-        },
-        skills: {
-          ...DEFAULTS.skills,
-          ...parsed.skills,
-          steps: Array.isArray(parsed.skills?.steps) ? parsed.skills.steps : [],
-        },
-        hotkey: parsed.hotkey ?? DEFAULTS.hotkey,
-        version: 2,
+        version: 3,
+        activeProfileId: parsed.activeProfileId ?? profiles[0]?.id ?? DEFAULTS.activeProfileId,
+        profiles: profiles.length > 0 ? profiles : [defaultProfile()],
       }
     }
-    return migrateFromV1(parsed)
+
+    // V2
+    if (parsed?.version === 2) {
+      const potions: PotionConfig = {
+        ...DEFAULTS.profiles[0].potions,
+        ...parsed.potions,
+        keys: { ...DEFAULTS.profiles[0].potions.keys, ...(parsed.potions?.keys ?? {}) },
+      }
+      const skills: SkillConfig = {
+        ...DEFAULTS.profiles[0].skills,
+        ...parsed.skills,
+        steps: Array.isArray(parsed.skills?.steps) ? parsed.skills.steps : [],
+      }
+      const profile = profileFromV2(potions, skills, parsed.hotkey ?? "F5")
+      return {
+        version: 3,
+        activeProfileId: profile.id,
+        profiles: [profile],
+      }
+    }
+
+    // V1
+    const potions: PotionConfig = {
+      ...DEFAULTS.profiles[0].potions,
+      enabled: Boolean(parsed.autoPotions),
+      keys: { ...DEFAULTS.profiles[0].potions.keys, ...((parsed.keys as Record<string, boolean>) ?? {}) },
+      customDelay: Boolean(parsed.customDelay),
+      delayMs: String(parsed.delayMs ?? MIN_DELAY),
+      repeatMode: (parsed.repeatMode as RepeatMode) ?? "loop",
+      repeatCount: String(parsed.repeatCount ?? "1"),
+    }
+    const profile = profileFromV2(potions, DEFAULTS.profiles[0].skills, parsed.hotkey ?? "F5")
+    return {
+      version: 3,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    }
   } catch {
     return DEFAULTS
   }
 }
 
-export function saveSettings(settings: SettingsV2) {
+export function saveSettings(settings: SettingsV3) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
 }
 
@@ -137,29 +181,11 @@ export function toAccelerator(key: string): string {
   return SPECIAL_ACCELERATORS[key] ?? key
 }
 
-export type ExportedProfile = {
-  version: 2
-  name: string
-  potions: PotionConfig
-  skills: SkillConfig
-  hotkey: string
+export function exportProfilesToString(profiles: Profile[]): string {
+  return JSON.stringify({ version: 3, profiles }, null, 2)
 }
 
-export function exportProfileToString(settings: SettingsV2, name = "My Profile"): string {
-  const profile: ExportedProfile = {
-    version: 2,
-    name,
-    potions: settings.potions,
-    skills: settings.skills,
-    hotkey: settings.hotkey,
-  }
-  return JSON.stringify(profile, null, 2)
-}
-
-export function importProfileFromString(
-  json: string,
-  currentSettings: SettingsV2,
-): { settings: SettingsV2; name: string } {
+export function importProfilesFromString(json: string): Profile[] {
   let parsed: unknown
   try {
     parsed = JSON.parse(json)
@@ -173,45 +199,44 @@ export function importProfileFromString(
 
   const p = parsed as Record<string, unknown>
 
-  if (p.version !== 2) {
-    throw new Error(`Unsupported profile version: ${p.version}`)
+  // V3 file with profiles array
+  if (p.version === 3 && Array.isArray(p.profiles)) {
+    return p.profiles as Profile[]
   }
 
-  const name = String(p.name ?? "Imported Profile")
-
-  const importedPotions = p.potions as Record<string, unknown> | undefined
-  const importedSkills = p.skills as Record<string, unknown> | undefined
-
-  const potions: PotionConfig = importedPotions
-    ? {
-        enabled: Boolean(importedPotions.enabled),
-        keys: {
-          ...DEFAULTS.potions.keys,
-          ...((importedPotions.keys as Record<string, boolean>) ?? {}),
+  // V2 file — wrap single config into a profile
+  if (p.version === 2) {
+    const potions = p.potions as Record<string, unknown> | undefined
+    const skills = p.skills as Record<string, unknown> | undefined
+    return [
+      {
+        id: crypto.randomUUID(),
+        name: String(p.name ?? "Imported"),
+        hotkey: String(p.hotkey ?? "F5"),
+        potions: {
+          enabled: Boolean(potions?.enabled),
+          keys: {
+            q: Boolean((potions?.keys as Record<string, boolean>)?.q ?? true),
+            w: Boolean((potions?.keys as Record<string, boolean>)?.w ?? true),
+            e: Boolean((potions?.keys as Record<string, boolean>)?.e ?? true),
+            r: Boolean((potions?.keys as Record<string, boolean>)?.r ?? true),
+          },
+          customDelay: Boolean(potions?.customDelay),
+          delayMs: String(potions?.delayMs ?? MIN_DELAY),
+          repeatMode: ((potions?.repeatMode as RepeatMode) ?? "loop"),
+          repeatCount: String(potions?.repeatCount ?? "1"),
         },
-        customDelay: Boolean(importedPotions.customDelay),
-        delayMs: String(importedPotions.delayMs ?? DEFAULTS.potions.delayMs),
-        repeatMode: ((importedPotions.repeatMode as RepeatMode) ?? DEFAULTS.potions.repeatMode),
-        repeatCount: String(importedPotions.repeatCount ?? DEFAULTS.potions.repeatCount),
-      }
-    : currentSettings.potions
-
-  const skills: SkillConfig = importedSkills
-    ? {
-        enabled: Boolean(importedSkills.enabled),
-        steps: Array.isArray(importedSkills.steps) ? (importedSkills.steps as SkillStep[]) : [],
-        repeatMode: ((importedSkills.repeatMode as RepeatMode) ?? DEFAULTS.skills.repeatMode),
-        repeatCount: String(importedSkills.repeatCount ?? DEFAULTS.skills.repeatCount),
-      }
-    : currentSettings.skills
-
-  return {
-    settings: {
-      version: 2,
-      potions,
-      skills,
-      hotkey: String(p.hotkey ?? currentSettings.hotkey),
-    },
-    name,
+        skills: {
+          enabled: Boolean(skills?.enabled),
+          holdRightClick: Boolean(skills?.holdRightClick),
+          steps: Array.isArray(skills?.steps) ? (skills?.steps as SkillStep[]) : [],
+          labelStyle: ((skills?.labelStyle as StepLabelStyle) ?? "abbreviation"),
+          repeatMode: ((skills?.repeatMode as RepeatMode) ?? "loop"),
+          repeatCount: String(skills?.repeatCount ?? "1"),
+        },
+      },
+    ]
   }
+
+  throw new Error("Unsupported profile format")
 }

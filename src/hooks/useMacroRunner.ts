@@ -20,6 +20,7 @@ type SkillStepConfig = {
 };
 
 type SkillsConfig = {
+  holdRightClick: boolean
   steps: SkillStepConfig[]
   repeatMode: RepeatMode
   repeatCount: number
@@ -30,6 +31,8 @@ type UseMacroRunnerArgs = {
   potionsConfig: PotionsConfig
   skillsCanRun: boolean
   skillsConfig: SkillsConfig
+  onStart?: () => void
+  onStop?: () => void
 }
 
 export function useMacroRunner({
@@ -37,6 +40,8 @@ export function useMacroRunner({
   potionsConfig,
   skillsCanRun,
   skillsConfig,
+  onStart,
+  onStop,
 }: UseMacroRunnerArgs) {
   const [potionsRunning, setPotionsRunning] = useState(false)
   const [skillsRunning, setSkillsRunning] = useState(false)
@@ -61,12 +66,17 @@ export function useMacroRunner({
   const skillsConfigRef = useRef(skillsConfig)
   skillsConfigRef.current = skillsConfig
 
+  const onStartRef = useRef(onStart)
+  onStartRef.current = onStart
+  const onStopRef = useRef(onStop)
+  onStopRef.current = onStop
+
   const toggleRunning = useCallback(() => {
     if (potionsRunningRef.current || skillsRunningRef.current) {
       invoke("stop_all")
       setPotionsRunning(false)
       setSkillsRunning(false)
-      toast("Stopped")
+      onStopRef.current?.()
       return
     }
 
@@ -95,6 +105,7 @@ export function useMacroRunner({
       const c = skillsConfigRef.current
       invoke("start_skills", {
         config: {
+          holdRightClick: c.holdRightClick,
           steps: c.steps,
           repeatMode: c.repeatMode,
           repeatCount: c.repeatCount,
@@ -103,7 +114,7 @@ export function useMacroRunner({
       setSkillsRunning(true)
     }
 
-    toast.success("Started")
+    onStartRef.current?.()
   }, [])
 
   useEffect(() => {
@@ -140,7 +151,7 @@ export function useMacroRunner({
           (event.payload.channel === "potions" && !skillsRunningRef.current) ||
           (event.payload.channel === "skills" && !potionsRunningRef.current)
         ) {
-          toast("Finished repeat sequence")
+          onStopRef.current?.()
         }
       },
     )

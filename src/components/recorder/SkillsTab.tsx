@@ -1,11 +1,12 @@
 import { useState } from "react"
-import { ArrowDown, ArrowUp, ClipboardPaste, Copy, Plus, Trash2, Wand2 } from "lucide-react"
+import { ArrowDown, ArrowUp, ClipboardPaste, Copy, Lock, LockOpen, Plus, Trash2, Wand2 } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -23,7 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { type RepeatMode, type SkillStep } from "@/lib/settings"
+import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/lib/settings"
 
 type SkillsTabProps = {
   enabled: boolean
@@ -38,6 +39,10 @@ type SkillsTabProps = {
   onMoveStepDown: (id: string) => void
   onDuplicateStep: (id: string) => void
   onUpdateStep: (id: string, patch: { key?: string; ms?: string }) => void
+  labelStyle: StepLabelStyle
+  setLabelStyle: (style: StepLabelStyle) => void
+  holdRightClick: boolean
+  setHoldRightClick: (v: boolean) => void
   repeatMode: RepeatMode
   setRepeatMode: (mode: RepeatMode) => void
   repeatCount: string
@@ -115,6 +120,10 @@ export function SkillsTab({
   onMoveStepDown,
   onDuplicateStep,
   onUpdateStep,
+  labelStyle,
+  setLabelStyle,
+  holdRightClick,
+  setHoldRightClick,
   repeatMode,
   setRepeatMode,
   repeatCount,
@@ -127,6 +136,14 @@ export function SkillsTab({
   const [comboDelays, setComboDelays] = useState("")
   const [comboOpen, setComboOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [locked, setLocked] = useState(true)
+
+  const labelText = (type: SkillStep["type"]) => {
+    if (labelStyle === "icon") {
+      return type === "keydown" ? "↓" : type === "keyup" ? "↑" : "⏱"
+    }
+    return type === "keydown" ? "KD" : type === "keyup" ? "KU" : "DL"
+  }
 
   const handleJitbitParse = () => {
     if (!jitbitText.trim()) return
@@ -155,7 +172,7 @@ export function SkillsTab({
 
   return (
     <Card size="sm" className="h-full">
-      <CardContent className="flex flex-col gap-4 overflow-y-auto">
+      <CardContent className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="enable-skills" className="font-normal">
             Enable skills channel
@@ -168,154 +185,199 @@ export function SkillsTab({
         </div>
 
         {enabled ? (
-          <div className="flex flex-col gap-3">
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="hold-right-click" className="font-normal">
+                Hold right mouse button
+              </Label>
+              <Switch
+                id="hold-right-click"
+                checked={holdRightClick}
+                onCheckedChange={setHoldRightClick}
+              />
+            </div>
+
             <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onAddKeydown}
-                className="gap-1"
-              >
-                <Plus className="size-3" />
-                KeyDown
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onAddKeyup}
-                className="gap-1"
-              >
-                <Plus className="size-3" />
-                KeyUp
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onAddDelay}
-                className="gap-1"
-              >
-                <Plus className="size-3" />
-                Delay
-              </Button>
+              <span className="text-xs text-muted-foreground">Labels:</span>
+              <Select value={labelStyle} onValueChange={(v) => setLabelStyle(v as StepLabelStyle)}>
+                <SelectTrigger className="h-7 w-[120px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="abbreviation">KD / KU / DL</SelectItem>
+                  <SelectItem value="icon">↓ / ↑ / ⏱</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {!locked && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onAddKeydown}
+                    className="gap-1"
+                  >
+                    <Plus className="size-3" />
+                    KeyDown
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onAddKeyup}
+                    className="gap-1"
+                  >
+                    <Plus className="size-3" />
+                    KeyUp
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onAddDelay}
+                    className="gap-1"
+                  >
+                    <Plus className="size-3" />
+                    Delay
+                  </Button>
+                </>
+              )}
 
               <div className="flex-1" />
 
-              <Dialog open={comboOpen} onOpenChange={setComboOpen}>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <DialogTrigger
+              {!locked && (
+                <>
+                  <Dialog open={comboOpen} onOpenChange={setComboOpen}>
+                    <Tooltip>
+                      <TooltipTrigger
                         render={
-                          <Button size="icon" variant="ghost" className="size-8" aria-label="Quick combo">
-                            <Wand2 className="size-3.5" />
-                          </Button>
+                          <DialogTrigger
+                            render={
+                              <Button size="icon" variant="ghost" className="size-8" aria-label="Quick combo">
+                                <Wand2 className="size-3.5" />
+                              </Button>
+                            }
+                          />
                         }
                       />
-                    }
-                  />
-                  <TooltipContent>Quick combo generator</TooltipContent>
-                </Tooltip>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Quick Combo Generator</DialogTitle>
-                    <DialogDescription>
-                      Enter keys and delays to auto-generate a keydown/delay/keyup sequence.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Keys (comma-separated)</Label>
-                      <Input
-                        value={comboKeys}
-                        onChange={(e) => setComboKeys(e.target.value)}
-                        placeholder="1,2,3"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Delays (comma-separated): between presses, before releases, rest</Label>
-                      <Input
-                        value={comboDelays}
-                        onChange={(e) => setComboDelays(e.target.value)}
-                        placeholder="85,45,60,150"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Delays: between KeyDowns → before KeyUps → rest after cycle
-                      </p>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button size="sm" onClick={handleComboGenerate}>
-                      Generate
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                      <TooltipContent>Quick combo generator</TooltipContent>
+                    </Tooltip>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Quick Combo Generator</DialogTitle>
+                        <DialogDescription>
+                          Enter keys and delays to auto-generate a keydown/delay/keyup sequence.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs">Keys (comma-separated)</Label>
+                          <Input
+                            value={comboKeys}
+                            onChange={(e) => setComboKeys(e.target.value)}
+                            placeholder="1,2,3"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs">Delays (comma-separated): between presses, before releases, rest</Label>
+                          <Input
+                            value={comboDelays}
+                            onChange={(e) => setComboDelays(e.target.value)}
+                            placeholder="85,45,60,150"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Delays: between KeyDowns → before KeyUps → rest after cycle
+                          </p>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button size="sm" onClick={handleComboGenerate}>
+                          Generate
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
-              <Dialog open={jitbitOpen} onOpenChange={setJitbitOpen}>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <DialogTrigger
+                  <Dialog open={jitbitOpen} onOpenChange={setJitbitOpen}>
+                    <Tooltip>
+                      <TooltipTrigger
                         render={
-                          <Button size="icon" variant="ghost" className="size-8" aria-label="Import from Jitbit">
-                            <ClipboardPaste className="size-3.5" />
-                          </Button>
+                          <DialogTrigger
+                            render={
+                              <Button size="icon" variant="ghost" className="size-8" aria-label="Import from Jitbit">
+                                <ClipboardPaste className="size-3.5" />
+                              </Button>
+                            }
+                          />
                         }
                       />
-                    }
-                  />
-                  <TooltipContent>Import from Jitbit</TooltipContent>
-                </Tooltip>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Import from Jitbit Macro Recorder</DialogTitle>
-                    <DialogDescription>
-                      Paste your Jitbit macro script below.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Textarea
-                    value={jitbitText}
-                    onChange={(e) => setJitbitText(e.target.value)}
-                    placeholder={`Keyboard : D1 : KeyDown\nDELAY : 85\nKeyboard : D2 : KeyDown\nDELAY : 45\n...`}
-                    rows={10}
-                    className="font-mono text-xs"
-                  />
-                  <DialogFooter>
-                    <Button size="sm" onClick={handleJitbitParse}>
-                      Parse & Import
+                      <TooltipContent>Import from Jitbit</TooltipContent>
+                    </Tooltip>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Import from Jitbit Macro Recorder</DialogTitle>
+                        <DialogDescription>
+                          Paste your Jitbit macro script below.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <Textarea
+                        value={jitbitText}
+                        onChange={(e) => setJitbitText(e.target.value)}
+                        placeholder={`Keyboard : D1 : KeyDown\nDELAY : 85\nKeyboard : D2 : KeyDown\nDELAY : 45\n...`}
+                        rows={10}
+                        className="font-mono text-xs"
+                      />
+                      <DialogFooter>
+                        <Button size="sm" onClick={handleJitbitParse}>
+                          Parse & Import
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              )}
+
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-8"
+                      aria-label={locked ? "Unlock editing" : "Lock editing"}
+                      onClick={() => setLocked((l) => !l)}
+                    >
+                      {locked ? <Lock className="size-3.5" /> : <LockOpen className="size-3.5" />}
                     </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  }
+                />
+                <TooltipContent>{locked ? "Unlock editing" : "Lock editing"}</TooltipContent>
+              </Tooltip>
             </div>
 
-            {steps.length > 0 ? (
-              <div className="flex flex-col gap-1.5">
-                {steps.map((step, i) => (
-                  <div
-                    key={step.id}
-                    onClick={() =>
-                      setSelectedId((prev) => (prev === step.id ? null : step.id))
-                    }
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-2 py-1.5 transition-colors ${
-                      selectedId === step.id
-                        ? "border-primary bg-primary/10 ring-1 ring-primary"
-                        : "hover:bg-muted/50"
-                    }`}
-                  >
-                    <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">
-                      {step.type === "keydown"
-                        ? "KeyDown"
-                        : step.type === "keyup"
-                          ? "KeyUp"
-                          : "Delay"}
-                    </span>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {steps.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  {steps.map((step, i) => (
+                    <div
+                      key={step.id}
+                      onClick={() =>
+                        setSelectedId((prev) => (prev === step.id ? null : step.id))
+                      }
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1 transition-colors ${
+                        selectedId === step.id
+                          ? "border-primary bg-primary/10 ring-1 ring-primary"
+                          : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="w-8 shrink-0 text-center text-xs font-medium text-muted-foreground">
+                        {labelText(step.type)}
+                      </span>
 
                     {step.type === "delay" ? (
                       <>
                         <Input
                           inputMode="numeric"
                           value={step.ms}
+                          readOnly={locked}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) =>
                             onUpdateStep(step.id, {
@@ -329,6 +391,7 @@ export function SkillsTab({
                     ) : (
                       <Input
                         value={step.key}
+                        readOnly={locked}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) =>
                           onUpdateStep(step.id, {
@@ -343,13 +406,15 @@ export function SkillsTab({
 
                     <div className="flex-1" />
 
+                    {!locked && (
+                      <>
                     <Tooltip>
                       <TooltipTrigger
                         render={
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="size-5"
+                            className="size-4"
                             disabled={i === 0}
                             aria-label="Move up"
                             onClick={(e) => {
@@ -369,7 +434,7 @@ export function SkillsTab({
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="size-5"
+                            className="size-4"
                             disabled={i >= steps.length - 1}
                             aria-label="Move down"
                             onClick={(e) => {
@@ -389,7 +454,7 @@ export function SkillsTab({
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="size-5"
+                            className="size-4"
                             aria-label="Duplicate step"
                             onClick={(e) => {
                               e.stopPropagation()
@@ -409,7 +474,7 @@ export function SkillsTab({
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="size-6"
+                            className="size-4"
                             aria-label="Remove step"
                             onClick={(e) => {
                               e.stopPropagation()
@@ -422,58 +487,63 @@ export function SkillsTab({
                       />
                       <TooltipContent>Remove step</TooltipContent>
                     </Tooltip>
+                      </>
+                    )}
                   </div>
                 ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground py-2">
+                  {locked
+                    ? "No steps configured. Unlock to add steps."
+                    : "No steps yet. Add KeyDown, KeyUp, or Delay steps above."}
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-col gap-2">
+              <Label className="font-normal">Repeat mode</Label>
+              <div className="flex items-center gap-2">
+                <ToggleGroup
+                  value={[repeatMode]}
+                  onValueChange={(v) => {
+                    const next = v[0] as RepeatMode | undefined
+                    if (next) setRepeatMode(next)
+                  }}
+                  variant="outline"
+                >
+                  <ToggleGroupItem value="loop">Loop</ToggleGroupItem>
+                  <ToggleGroupItem value="count">Repeat N</ToggleGroupItem>
+                </ToggleGroup>
+                {repeatMode === "count" && (
+                  <Input
+                    inputMode="numeric"
+                    aria-invalid={repeatError}
+                    value={repeatCount}
+                    onChange={(e) =>
+                      setRepeatCount(e.target.value.replace(/[^0-9]/g, ""))
+                    }
+                    placeholder="1"
+                    className="w-20"
+                  />
+                )}
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No steps yet. Add KeyDown, KeyUp, or Delay steps above.
-              </p>
-            )}
-          </div>
+              {repeatMode === "count" && (
+                <p
+                  className={`text-xs ${repeatError ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {repeatError ? "Minimum is 1." : "How many times to repeat."}
+                </p>
+              )}
+            </div>
+          </>
         ) : (
           <p className="text-xs text-muted-foreground">
             Turn on to configure skill keys.
           </p>
         )}
-
-        <Separator />
-
-        <div className="flex flex-col gap-2">
-          <Label className="font-normal">Repeat mode</Label>
-          <div className="flex items-center gap-2">
-            <ToggleGroup
-              value={[repeatMode]}
-              onValueChange={(v) => {
-                const next = v[0] as RepeatMode | undefined
-                if (next) setRepeatMode(next)
-              }}
-              variant="outline"
-            >
-              <ToggleGroupItem value="loop">Loop</ToggleGroupItem>
-              <ToggleGroupItem value="count">Repeat N</ToggleGroupItem>
-            </ToggleGroup>
-            {repeatMode === "count" && (
-              <Input
-                inputMode="numeric"
-                aria-invalid={repeatError}
-                value={repeatCount}
-                onChange={(e) =>
-                  setRepeatCount(e.target.value.replace(/[^0-9]/g, ""))
-                }
-                placeholder="1"
-                className="w-20"
-              />
-            )}
-          </div>
-          {repeatMode === "count" && (
-            <p
-              className={`text-xs ${repeatError ? "text-destructive" : "text-muted-foreground"}`}
-            >
-              {repeatError ? "Minimum is 1." : "How many times to repeat."}
-            </p>
-          )}
-        </div>
       </CardContent>
     </Card>
   )

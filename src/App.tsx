@@ -1,23 +1,61 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
+import { getCurrentWindow } from "@tauri-apps/api/window"
+import { LogicalSize } from "@tauri-apps/api/dpi"
 import { save, open } from "@tauri-apps/plugin-dialog"
 import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { AppHeader } from "@/components/recorder/AppHeader"
 import { KeysTab } from "@/components/recorder/KeysTab"
 import { SkillsTab } from "@/components/recorder/SkillsTab"
-import { HotkeysTab } from "@/components/recorder/HotkeysTab"
+import { ProfilesTab } from "@/components/recorder/ProfilesTab"
 import { RunControl } from "@/components/recorder/RunControl"
+import { CompactOverlay } from "@/components/recorder/CompactOverlay"
 import { useSettings } from "@/hooks/useSettings"
 import { useMacroRunner } from "@/hooks/useMacroRunner"
-import { useHotkey } from "@/hooks/useHotkey"
-import { toAccelerator, exportProfileToString, importProfileFromString } from "@/lib/settings"
+import { toAccelerator, exportProfilesToString, importProfilesFromString } from "@/lib/settings"
 import "./App.css"
 
 function App() {
   const settings = useSettings()
-  const [capturing, setCapturing] = useState(false)
+  const [compactMode, setCompactMode] = useState(false)
+  const [savedSize, setSavedSize] = useState<LogicalSize | null>(null)
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
+
+  const compactModeRef = useRef(compactMode)
+  compactModeRef.current = compactMode
+
+  const currentFilePathRef = useRef(currentFilePath)
+  currentFilePathRef.current = currentFilePath
+
+  const COMPACT = new LogicalSize(500, 68)
+
+  const enterCompact = useCallback(async () => {
+    try {
+      const win = getCurrentWindow()
+      const current = await win.innerSize()
+      setSavedSize(new LogicalSize(current))
+      await win.setSizeConstraints(null)
+      await win.setResizable(true)
+      await win.setSize(COMPACT)
+      await win.setResizable(false)
+      setCompactMode(true)
+    } catch (e) {
+      toast.error(`Compact mode failed: ${e}`)
+    }
+  }, [])
+
+  const exitCompact = useCallback(async () => {
+    if (!compactModeRef.current) return
+    try {
+      const win = getCurrentWindow()
+      await win.setSize(savedSize ?? new LogicalSize(660, 720))
+    } catch (e) {
+      toast.error(`Restore mode failed: ${e}`)
+    }
+    setCompactMode(false)
+  }, [savedSize])
 
   const {
     anyRunning,
@@ -29,36 +67,18 @@ function App() {
     potionsConfig: settings.potionsConfig,
     skillsCanRun: settings.skillsCanRun,
     skillsConfig: settings.skillsConfig,
-  })
-
-  useHotkey({
-    setHotkey: settings.setHotkey,
-    capturing,
-    setCapturing,
+    onStart: enterCompact,
+    onStop: exitCompact,
   })
 
   const handleReset = useCallback(() => {
     invoke("stop_all")
     settings.reset()
-  }, [settings])
+    exitCompact()
+    setCurrentFilePath(null)
+  }, [settings, exitCompact])
 
-  const handleExport = useCallback(async () => {
-    try {
-      const current = settings.buildSettings()
-      const json = exportProfileToString(current)
-      const path = await save({
-        defaultPath: "combo-profile.json",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      })
-      if (!path) return
-      await invoke("save_file", { path, content: json })
-      toast.success("Profile exported")
-    } catch (e) {
-      toast.error(`Export failed: ${e}`)
-    }
-  }, [settings])
-
-  const handleImport = useCallback(async () => {
+  const handleOpen = useCallback(async () => {
     try {
       const path = await open({
         filters: [{ name: "JSON", extensions: ["json"] }],
@@ -66,46 +86,126 @@ function App() {
       })
       if (!path) return
       const content = await invoke<string>("read_file", { path: path as string })
-      const current = settings.buildSettings()
-      const { settings: imported, name } = importProfileFromString(content, current)
-      settings.applySettings(imported)
-      toast.success(`Imported "${name}"`)
+      const imported = importProfilesFromString(content)
+      if (imported.length === 0) {
+        toast.error("No profiles found in file")
+        return
+      }
+      settings.setProfilesAll(imported)
+      setCurrentFilePath(path as string)
+      const openedName = (path as string).split(/[\\/]/).pop() ?? path
+      toast.success(`Opened ${openedName}`)
     } catch (e) {
-      toast.error(`Import failed: ${e}`)
+      toast.error(`Open failed: ${e}`)
     }
   }, [settings])
 
+  const saveToPath = useCallback(async (path: string) => {
+    const json = exportProfilesToString(settings.profiles)
+    await invoke("save_file", { path, content: json })
+    setCurrentFilePath(path)
+  }, [settings.profiles])
+
+  const handleSave = useCallback(async () => {
+    try {
+      const existing = currentFilePathRef.current
+      if (existing) {
+        await saveToPath(existing)
+        toast.success("Saved")
+        return
+      }
+      const path = await save({
+        defaultPath: "combo-profiles.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      })
+      if (!path) return
+      await saveToPath(path)
+      toast.success("Saved")
+    } catch (e) {
+      toast.error(`Save failed: ${e}`)
+    }
+  }, [saveToPath])
+
+  const handleSaveAs = useCallback(async () => {
+    try {
+      const path = await save({
+        defaultPath: "combo-profiles.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      })
+      if (!path) return
+      await saveToPath(path)
+      toast.success("Saved")
+    } catch (e) {
+      toast.error(`Save failed: ${e}`)
+    }
+  }, [saveToPath])
+
   useEffect(() => {
-    const unlisten = listen("macro-toggle", () => {
-      toggleRunning()
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [handleSave])
+
+  useEffect(() => {
+    const hotkeys = settings.profiles.map((p) => ({
+      shortcut: toAccelerator(p.hotkey),
+      profileId: p.id,
+    }))
+    invoke("set_hotkeys", { hotkeys }).catch(
+      () => toast.warning("Failed to register global hotkeys"),
+    )
+  }, [settings.profiles])
+
+  useEffect(() => {
+    const unlisten = listen<string>("macro-toggle", (event) => {
+      const profileId = event.payload
+      if (profileId !== settings.activeProfileId) {
+        settings.setActiveProfileId(profileId)
+        setTimeout(() => toggleRunning(), 0)
+      } else {
+        toggleRunning()
+      }
     })
     return () => {
       unlisten.then((fn) => fn())
     }
-  }, [toggleRunning])
+  }, [toggleRunning, settings.activeProfileId])
 
-  useEffect(() => {
-    invoke("set_hotkey", { shortcut: toAccelerator(settings.hotkey) }).catch(
-      () => toast.warning(`"${settings.hotkey}" can't be used as a global hotkey`),
+  if (compactMode) {
+    return (
+      <CompactOverlay
+        elapsed={elapsed}
+        activations={totalCycles}
+        potionsActive={settings.potionsCanRun}
+        skillsActive={settings.skillsCanRun}
+        hotkey={settings.hotkey}
+        onStop={() => toggleRunning()}
+      />
     )
-  }, [settings.hotkey])
+  }
 
   return (
     <main className="flex min-h-screen flex-col gap-4 p-4">
       <AppHeader
         running={anyRunning}
         elapsed={elapsed}
-        activations={totalCycles}
+        fileName={currentFilePath}
         onReset={handleReset}
-        onExport={handleExport}
-        onImport={handleImport}
+        onOpen={handleOpen}
+        onSave={handleSave}
+        onSaveAs={handleSaveAs}
       />
 
-      <Tabs defaultValue="potions" className="flex-1">
+      <Tabs defaultValue="potions" className="flex-1 min-h-0">
         <TabsList className="w-full">
           <TabsTrigger value="potions">Potions</TabsTrigger>
           <TabsTrigger value="skills">Skills</TabsTrigger>
-          <TabsTrigger value="hotkeys">Hotkeys</TabsTrigger>
+          <TabsTrigger value="profiles">Profiles</TabsTrigger>
         </TabsList>
 
         <TabsContent value="potions">
@@ -141,6 +241,10 @@ function App() {
             onMoveStepDown={settings.moveSkillStepDown}
             onDuplicateStep={settings.duplicateSkillStep}
             onUpdateStep={settings.updateSkillStep}
+            labelStyle={settings.labelStyle}
+            setLabelStyle={settings.setLabelStyle}
+            holdRightClick={settings.holdRightClick}
+            setHoldRightClick={settings.setHoldRightClick}
             repeatMode={settings.skillsRepeatMode}
             setRepeatMode={settings.setSkillsRepeatMode}
             repeatCount={settings.skillsRepeatCount}
@@ -149,11 +253,15 @@ function App() {
           />
         </TabsContent>
 
-        <TabsContent value="hotkeys">
-          <HotkeysTab
-            hotkey={settings.hotkey}
-            capturing={capturing}
-            setCapturing={setCapturing}
+        <TabsContent value="profiles">
+          <ProfilesTab
+            profiles={settings.profiles}
+            activeProfileId={settings.activeProfileId}
+            setActiveProfileId={settings.setActiveProfileId}
+            onAddProfile={settings.addProfile}
+            onDeleteProfile={settings.deleteProfile}
+            onRenameProfile={settings.renameProfile}
+            onUpdateHotkey={settings.updateProfileHotkey}
           />
         </TabsContent>
       </Tabs>
@@ -162,7 +270,7 @@ function App() {
         running={anyRunning}
         canRun={settings.canRun}
         hotkey={settings.hotkey}
-        onToggle={toggleRunning}
+        onToggle={() => toggleRunning()}
       />
     </main>
   )
