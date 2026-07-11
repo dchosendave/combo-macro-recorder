@@ -57,6 +57,13 @@ function App() {
     setCompactMode(false)
   }, [savedSize])
 
+  const runningProfileIdRef = useRef<string | null>(null)
+
+  const handleStop = useCallback(() => {
+    exitCompact()
+    runningProfileIdRef.current = null
+  }, [exitCompact])
+
   const {
     anyRunning,
     elapsed,
@@ -68,7 +75,7 @@ function App() {
     skillsCanRun: settings.skillsCanRun,
     skillsConfig: settings.skillsConfig,
     onStart: enterCompact,
-    onStop: exitCompact,
+    onStop: handleStop,
   })
 
   const handleReset = useCallback(() => {
@@ -177,12 +184,20 @@ function App() {
       if (!profile) return
 
       if (profile.comboPath) {
-        // Always stop current, load file, then start fresh
+        // Same profile pressed again → just toggle (stop)
+        if (runningProfileIdRef.current === profile.id) {
+          toggleRunning()
+          return
+        }
+
+        // Different profile or nothing running → stop current, load file, start
         invoke("stop_all")
+        runningProfileIdRef.current = null
         invoke<string>("read_file", { path: profile.comboPath })
           .then((content) => {
             const combo = importComboFromString(content)
             settings.applyCombo(combo)
+            runningProfileIdRef.current = profile.id
             setTimeout(() => toggleRunning(), 0)
           })
           .catch(() => toast.error(`Failed to load ${profile.name}`))
@@ -292,12 +307,12 @@ function App() {
         </TabsContent>
       </Tabs>
 
-      <RunControl
+      {/* <RunControl
         running={anyRunning}
         canRun={settings.canRun}
         hotkey={codeToLabel(settings.hotkey)}
         onToggle={() => toggleRunning()}
-      />
+      /> */}
     </main>
   )
 }
