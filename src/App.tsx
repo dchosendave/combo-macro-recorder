@@ -104,7 +104,7 @@ function App() {
         onToggle={toggleRunning}
       />
 
-      <DevVisualizer />
+      {/* <DevVisualizer /> */}
     </main>
   )
 }

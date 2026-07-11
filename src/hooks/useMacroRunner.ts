@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { toast } from "sonner"
@@ -28,14 +28,20 @@ export function useMacroRunner({
   const configRef = useRef({ keys, delayMs, delayError, repeatMode, repeatCount })
   configRef.current = { keys, delayMs, delayError, repeatMode, repeatCount }
 
-  const toggleRunning = () => {
-    if (running) {
+  const runningRef = useRef(running)
+  runningRef.current = running
+
+  const canRunRef = useRef(canRun)
+  canRunRef.current = canRun
+
+  const toggleRunning = useCallback(() => {
+    if (runningRef.current) {
       invoke("stop_macro")
       setRunning(false)
       toast("Stopped")
       return
     }
-    if (!canRun) {
+    if (!canRunRef.current) {
       toast.warning("Enable at least one potion key first")
       return
     }
@@ -52,7 +58,7 @@ export function useMacroRunner({
     invoke("start_macro", { config })
     setRunning(true)
     toast.success("Started")
-  }
+  }, [])
 
   useEffect(() => {
     if (!running) return
