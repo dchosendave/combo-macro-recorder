@@ -9,12 +9,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { AppHeader } from "@/components/recorder/AppHeader"
 import { KeysTab } from "@/components/recorder/KeysTab"
 import { SkillsTab } from "@/components/recorder/SkillsTab"
-import { ProfilesTab } from "@/components/recorder/ProfilesTab"
+import { HotkeysTab } from "@/components/recorder/HotkeysTab"
 import { RunControl } from "@/components/recorder/RunControl"
 import { CompactOverlay } from "@/components/recorder/CompactOverlay"
 import { useSettings } from "@/hooks/useSettings"
 import { useMacroRunner } from "@/hooks/useMacroRunner"
-import { toAccelerator, exportProfilesToString, importProfilesFromString } from "@/lib/settings"
+import { codeToShortcut, codeToLabel, exportComboToString, importComboFromString } from "@/lib/settings"
 import "./App.css"
 
 function App() {
@@ -86,12 +86,8 @@ function App() {
       })
       if (!path) return
       const content = await invoke<string>("read_file", { path: path as string })
-      const imported = importProfilesFromString(content)
-      if (imported.length === 0) {
-        toast.error("No profiles found in file")
-        return
-      }
-      settings.setProfilesAll(imported)
+      const combo = importComboFromString(content)
+      settings.applyCombo(combo)
       setCurrentFilePath(path as string)
       const openedName = (path as string).split(/[\\/]/).pop() ?? path
       toast.success(`Opened ${openedName}`)
@@ -101,10 +97,18 @@ function App() {
   }, [settings])
 
   const saveToPath = useCallback(async (path: string) => {
-    const json = exportProfilesToString(settings.profiles)
+    const json = exportComboToString({
+      potions: { enabled: settings.potionsEnabled, keys: settings.potionKeys, customDelay: settings.customDelay, delayMs: settings.delayMs, repeatMode: settings.potionsRepeatMode, repeatCount: settings.potionsRepeatCount },
+      skills: { enabled: settings.skillsEnabled, holdRightClick: settings.holdRightClick, steps: settings.skillSteps, labelStyle: settings.labelStyle, repeatMode: settings.skillsRepeatMode, repeatCount: settings.skillsRepeatCount },
+    })
     await invoke("save_file", { path, content: json })
     setCurrentFilePath(path)
-  }, [settings.profiles])
+  }, [
+    settings.potionsEnabled, settings.potionKeys, settings.customDelay, settings.delayMs,
+    settings.potionsRepeatMode, settings.potionsRepeatCount,
+    settings.skillsEnabled, settings.holdRightClick, settings.skillSteps, settings.labelStyle,
+    settings.skillsRepeatMode, settings.skillsRepeatCount,
+  ])
 
   const handleSave = useCallback(async () => {
     try {
@@ -115,7 +119,7 @@ function App() {
         return
       }
       const path = await save({
-        defaultPath: "combo-profiles.json",
+        defaultPath: "combo.json",
         filters: [{ name: "JSON", extensions: ["json"] }],
       })
       if (!path) return
@@ -129,7 +133,7 @@ function App() {
   const handleSaveAs = useCallback(async () => {
     try {
       const path = await save({
-        defaultPath: "combo-profiles.json",
+        defaultPath: "combo.json",
         filters: [{ name: "JSON", extensions: ["json"] }],
       })
       if (!path) return
@@ -152,21 +156,36 @@ function App() {
   }, [handleSave])
 
   useEffect(() => {
-    const hotkeys = settings.profiles.map((p) => ({
-      shortcut: toAccelerator(p.hotkey),
-      profileId: p.id,
-    }))
+    const hotkeys = settings.hotkeys
+      .filter((p) => p.hotkey)
+      .map((p) => ({
+        shortcut: codeToShortcut(p.hotkey),
+        hotkeyId: p.id,
+      }))
     invoke("set_hotkeys", { hotkeys }).catch(
       () => toast.warning("Failed to register global hotkeys"),
     )
-  }, [settings.profiles])
+  }, [settings.hotkeys])
+
+  const anyRunningRef = useRef(anyRunning)
+  anyRunningRef.current = anyRunning
 
   useEffect(() => {
     const unlisten = listen<string>("macro-toggle", (event) => {
-      const profileId = event.payload
-      if (profileId !== settings.activeProfileId) {
-        settings.setActiveProfileId(profileId)
-        setTimeout(() => toggleRunning(), 0)
+      const hotkeyId = event.payload
+      const profile = settings.hotkeys.find((p) => p.id === hotkeyId)
+      if (!profile) return
+
+      if (profile.comboPath) {
+        // Always stop current, load file, then start fresh
+        invoke("stop_all")
+        invoke<string>("read_file", { path: profile.comboPath })
+          .then((content) => {
+            const combo = importComboFromString(content)
+            settings.applyCombo(combo)
+            setTimeout(() => toggleRunning(), 0)
+          })
+          .catch(() => toast.error(`Failed to load ${profile.name}`))
       } else {
         toggleRunning()
       }
@@ -174,7 +193,7 @@ function App() {
     return () => {
       unlisten.then((fn) => fn())
     }
-  }, [toggleRunning, settings.activeProfileId])
+  }, [toggleRunning, settings])
 
   if (compactMode) {
     return (
@@ -183,7 +202,7 @@ function App() {
         activations={totalCycles}
         potionsActive={settings.potionsCanRun}
         skillsActive={settings.skillsCanRun}
-        hotkey={settings.hotkey}
+        hotkey={codeToLabel(settings.hotkey)}
         onStop={() => toggleRunning()}
       />
     )
@@ -201,67 +220,74 @@ function App() {
         onSaveAs={handleSaveAs}
       />
 
-      <Tabs defaultValue="potions" className="flex-1 min-h-0">
+      <Tabs defaultValue="combo" className="flex-1 min-h-0">
         <TabsList className="w-full">
-          <TabsTrigger value="potions">Potions</TabsTrigger>
-          <TabsTrigger value="skills">Skills</TabsTrigger>
-          <TabsTrigger value="profiles">Profiles</TabsTrigger>
+          <TabsTrigger value="combo">Combo</TabsTrigger>
+          <TabsTrigger value="profiles">Hotkeys</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="potions">
-          <KeysTab
-            autoPotions={settings.potionsEnabled}
-            setAutoPotions={settings.setPotionsEnabled}
-            keys={settings.potionKeys}
-            togglePotionKey={settings.togglePotionKey}
-            customDelay={settings.customDelay}
-            setCustomDelayEnabled={settings.setCustomDelayEnabled}
-            delayMs={settings.delayMs}
-            setDelayMs={settings.setDelayMs}
-            delayError={settings.potionsDelayError}
-            repeatMode={settings.potionsRepeatMode}
-            setRepeatMode={settings.setPotionsRepeatMode}
-            repeatCount={settings.potionsRepeatCount}
-            setRepeatCount={settings.setPotionsRepeatCount}
-            repeatError={settings.potionsRepeatError}
-          />
-        </TabsContent>
+        <TabsContent value="combo" className="flex-1 min-h-0 flex flex-col">
+          <Tabs defaultValue="potions" className="flex-1 min-h-0 flex flex-col">
+            <TabsList variant="line" className="w-full h-7">
+              <TabsTrigger value="potions" className="text-xs px-2">Potions</TabsTrigger>
+              <TabsTrigger value="skills" className="text-xs px-2">Skills</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="skills">
-          <SkillsTab
-            enabled={settings.skillsEnabled}
-            setEnabled={settings.setSkillsEnabled}
-            steps={settings.skillSteps}
-            onSetSteps={settings.setSkillSteps}
-            onAddKeydown={settings.addSkillKeydown}
-            onAddKeyup={settings.addSkillKeyup}
-            onAddDelay={settings.addSkillDelay}
-            onRemoveStep={settings.removeSkillStep}
-            onMoveStepUp={settings.moveSkillStepUp}
-            onMoveStepDown={settings.moveSkillStepDown}
-            onDuplicateStep={settings.duplicateSkillStep}
-            onUpdateStep={settings.updateSkillStep}
-            labelStyle={settings.labelStyle}
-            setLabelStyle={settings.setLabelStyle}
-            holdRightClick={settings.holdRightClick}
-            setHoldRightClick={settings.setHoldRightClick}
-            repeatMode={settings.skillsRepeatMode}
-            setRepeatMode={settings.setSkillsRepeatMode}
-            repeatCount={settings.skillsRepeatCount}
-            setRepeatCount={settings.setSkillsRepeatCount}
-            repeatError={settings.skillsRepeatError}
-          />
+            <TabsContent value="potions" className="flex-1 min-h-0">
+              <KeysTab
+                autoPotions={settings.potionsEnabled}
+                setAutoPotions={settings.setPotionsEnabled}
+                keys={settings.potionKeys}
+                togglePotionKey={settings.togglePotionKey}
+                customDelay={settings.customDelay}
+                setCustomDelayEnabled={settings.setCustomDelayEnabled}
+                delayMs={settings.delayMs}
+                setDelayMs={settings.setDelayMs}
+                delayError={settings.potionsDelayError}
+                repeatMode={settings.potionsRepeatMode}
+                setRepeatMode={settings.setPotionsRepeatMode}
+                repeatCount={settings.potionsRepeatCount}
+                setRepeatCount={settings.setPotionsRepeatCount}
+                repeatError={settings.potionsRepeatError}
+              />
+            </TabsContent>
+
+            <TabsContent value="skills" className="flex-1 min-h-0">
+              <SkillsTab
+                enabled={settings.skillsEnabled}
+                setEnabled={settings.setSkillsEnabled}
+                steps={settings.skillSteps}
+                onSetSteps={settings.setSkillSteps}
+                onAddKeydown={settings.addSkillKeydown}
+                onAddKeyup={settings.addSkillKeyup}
+                onAddDelay={settings.addSkillDelay}
+                onRemoveStep={settings.removeSkillStep}
+                onMoveStepUp={settings.moveSkillStepUp}
+                onMoveStepDown={settings.moveSkillStepDown}
+                onDuplicateStep={settings.duplicateSkillStep}
+                onUpdateStep={settings.updateSkillStep}
+                labelStyle={settings.labelStyle}
+                setLabelStyle={settings.setLabelStyle}
+                holdRightClick={settings.holdRightClick}
+                setHoldRightClick={settings.setHoldRightClick}
+                repeatMode={settings.skillsRepeatMode}
+                setRepeatMode={settings.setSkillsRepeatMode}
+                repeatCount={settings.skillsRepeatCount}
+                setRepeatCount={settings.setSkillsRepeatCount}
+                repeatError={settings.skillsRepeatError}
+              />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="profiles">
-          <ProfilesTab
-            profiles={settings.profiles}
-            activeProfileId={settings.activeProfileId}
-            setActiveProfileId={settings.setActiveProfileId}
-            onAddProfile={settings.addProfile}
-            onDeleteProfile={settings.deleteProfile}
-            onRenameProfile={settings.renameProfile}
-            onUpdateHotkey={settings.updateProfileHotkey}
+          <HotkeysTab
+            hotkeys={settings.hotkeys}
+            onAddHotkey={settings.addHotkey}
+            onDeleteHotkey={settings.deleteHotkey}
+            onRenameHotkey={settings.renameHotkey}
+            onUpdateHotkey={settings.updateHotkeyBinding}
+            onUpdatePath={settings.updateHotkeyPath}
           />
         </TabsContent>
       </Tabs>
@@ -269,7 +295,7 @@ function App() {
       <RunControl
         running={anyRunning}
         canRun={settings.canRun}
-        hotkey={settings.hotkey}
+        hotkey={codeToLabel(settings.hotkey)}
         onToggle={() => toggleRunning()}
       />
     </main>

@@ -16,7 +16,7 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 #[serde(rename_all = "camelCase")]
 struct HotkeyMapping {
     shortcut: String,
-    profile_id: String,
+    hotkey_id: String,
 }
 
 struct HotkeyState {
@@ -47,7 +47,7 @@ fn set_hotkeys(hotkeys: Vec<HotkeyMapping>, app: AppHandle, state: State<'_, Hot
 
     for h in &hotkeys {
         gs.register(h.shortcut.as_str()).map_err(|e| e.to_string())?;
-        mappings.insert(h.shortcut.clone(), h.profile_id.clone());
+        mappings.insert(h.shortcut.clone(), h.hotkey_id.clone());
     }
     Ok(())
 }
@@ -67,8 +67,8 @@ pub fn run() {
                         if let Some(state) = state {
                             let mappings = state.mappings.lock().unwrap();
                             let key = shortcut.to_string();
-                            if let Some(profile_id) = mappings.get(&key) {
-                                let _ = app.emit("macro-toggle", profile_id.clone());
+                            if let Some(hotkey_id) = mappings.get(&key) {
+                                let _ = app.emit("macro-toggle", hotkey_id.clone());
                             }
                         }
                     }

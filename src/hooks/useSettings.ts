@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import { toast } from "sonner"
 import {
   MIN_DELAY,
@@ -7,12 +8,11 @@ import {
   loadSettings,
   makeDefaultSettings,
   saveSettings,
-  type PotionConfig,
+  importComboFromString,
   type PotionKey,
-  type Profile,
+  type HotkeyBinding,
   type RepeatMode,
   type SettingsV3,
-  type SkillConfig,
   type SkillStep,
   type StepLabelStyle,
 } from "@/lib/settings"
@@ -20,44 +20,21 @@ import {
 export function useSettings() {
   const initial = loadSettings()
 
-  const [activeProfileId, setActiveProfileId] = useState(initial.activeProfileId)
-  const [profiles, setProfiles] = useState<Profile[]>(initial.profiles)
+  const [potionsEnabled, setPotionsEnabled] = useState(initial.current.potions.enabled)
+  const [potionKeys, setPotionKeys] = useState(initial.current.potions.keys)
+  const [customDelay, setCustomDelay] = useState(initial.current.potions.customDelay)
+  const [delayMs, setDelayMs] = useState(initial.current.potions.delayMs)
+  const [potionsRepeatMode, setPotionsRepeatMode] = useState<RepeatMode>(initial.current.potions.repeatMode)
+  const [potionsRepeatCount, setPotionsRepeatCount] = useState(initial.current.potions.repeatCount)
 
-  const activeProfile = useMemo(
-    () => profiles.find((p) => p.id === activeProfileId) ?? profiles[0],
-    [profiles, activeProfileId],
-  )
+  const [skillsEnabled, setSkillsEnabled] = useState(initial.current.skills.enabled)
+  const [holdRightClick, setHoldRightClick] = useState(initial.current.skills.holdRightClick)
+  const [skillSteps, setSkillSteps] = useState<SkillStep[]>(initial.current.skills.steps)
+  const [labelStyle, setLabelStyle] = useState<StepLabelStyle>(initial.current.skills.labelStyle)
+  const [skillsRepeatMode, setSkillsRepeatMode] = useState<RepeatMode>(initial.current.skills.repeatMode)
+  const [skillsRepeatCount, setSkillsRepeatCount] = useState(initial.current.skills.repeatCount)
 
-  const updateActivePotions = useCallback(
-    (patch: Partial<PotionConfig>) => {
-      setProfiles((prev) =>
-        prev.map((p) =>
-          p.id === activeProfileId ? { ...p, potions: { ...p.potions, ...patch } } : p,
-        ),
-      )
-    },
-    [activeProfileId],
-  )
-
-  const updateActiveSkills = useCallback(
-    (patch: Partial<SkillConfig>) => {
-      setProfiles((prev) =>
-        prev.map((p) =>
-          p.id === activeProfileId ? { ...p, skills: { ...p.skills, ...patch } } : p,
-        ),
-      )
-    },
-    [activeProfileId],
-  )
-
-  // --- Potions (derived from active profile) ---
-
-  const potionsEnabled = activeProfile.potions.enabled
-  const potionKeys = activeProfile.potions.keys
-  const customDelay = activeProfile.potions.customDelay
-  const delayMs = activeProfile.potions.delayMs
-  const potionsRepeatMode = activeProfile.potions.repeatMode
-  const potionsRepeatCount = activeProfile.potions.repeatCount
+  const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>(initial.hotkeys)
 
   const potionsDelayError =
     customDelay && delayMs !== "" && Number(delayMs) < MIN_DELAY
@@ -67,41 +44,6 @@ export function useSettings() {
   const anyPotionKeyEnabled = Object.values(potionKeys).some(Boolean)
   const potionsCanRun =
     potionsEnabled && anyPotionKeyEnabled && !potionsDelayError && !potionsRepeatError
-
-  const setPotionsEnabled = (v: boolean) => updateActivePotions({ enabled: v })
-  const setPotionsRepeatMode = (v: RepeatMode) => updateActivePotions({ repeatMode: v })
-  const setPotionsRepeatCount = (v: string) => updateActivePotions({ repeatCount: v })
-
-  const togglePotionKey = (key: PotionKey) => {
-    setProfiles((prev) =>
-      prev.map((p) =>
-        p.id === activeProfileId
-          ? { ...p, potions: { ...p.potions, keys: { ...p.potions.keys, [key]: !p.potions.keys[key] } } }
-          : p,
-      ),
-    )
-  }
-
-  const setCustomDelayEnabled = (enabled: boolean) => {
-    setProfiles((prev) =>
-      prev.map((p) =>
-        p.id === activeProfileId
-          ? { ...p, potions: { ...p.potions, customDelay: enabled, delayMs: enabled ? p.potions.delayMs : String(MIN_DELAY) } }
-          : p,
-      ),
-    )
-  }
-
-  const setDelayMs = (v: string) => updateActivePotions({ delayMs: v })
-
-  // --- Skills (derived from active profile) ---
-
-  const skillsEnabled = activeProfile.skills.enabled
-  const holdRightClick = activeProfile.skills.holdRightClick
-  const skillSteps = activeProfile.skills.steps
-  const labelStyle = activeProfile.skills.labelStyle
-  const skillsRepeatMode = activeProfile.skills.repeatMode
-  const skillsRepeatCount = activeProfile.skills.repeatCount
 
   const skillsRepeatError =
     skillsRepeatMode === "count" &&
@@ -113,117 +55,182 @@ export function useSettings() {
 
   const canRun = potionsCanRun || skillsCanRun
 
-  const setSkillsEnabled = (v: boolean) => updateActiveSkills({ enabled: v })
-  const setHoldRightClick = (v: boolean) => updateActiveSkills({ holdRightClick: v })
-  const setLabelStyle = (v: StepLabelStyle) => updateActiveSkills({ labelStyle: v })
-  const setSkillsRepeatMode = (v: RepeatMode) => updateActiveSkills({ repeatMode: v })
-  const setSkillsRepeatCount = (v: string) => updateActiveSkills({ repeatCount: v })
+  const togglePotionKey = (key: PotionKey) =>
+    setPotionKeys((prev) => ({ ...prev, [key]: !prev[key] }))
 
-  const setSkillSteps = (steps: SkillStep[]) => updateActiveSkills({ steps })
-
-  const addSkillKeydown = () =>
-    setSkillSteps([...skillSteps, { id: crypto.randomUUID(), type: "keydown", key: "" }])
-
-  const addSkillKeyup = () =>
-    setSkillSteps([...skillSteps, { id: crypto.randomUUID(), type: "keyup", key: "" }])
-
-  const addSkillDelay = () =>
-    setSkillSteps([...skillSteps, { id: crypto.randomUUID(), type: "delay", ms: "100" }])
-
-  const removeSkillStep = (id: string) =>
-    setSkillSteps(skillSteps.filter((s) => s.id !== id))
-
-  const moveSkillStepUp = (id: string) => {
-    const i = skillSteps.findIndex((s) => s.id === id)
-    if (i <= 0) return
-    const next = [...skillSteps]
-    ;[next[i - 1], next[i]] = [next[i], next[i - 1]]
-    setSkillSteps(next)
+  const setCustomDelayEnabled = (enabled: boolean) => {
+    setCustomDelay(enabled)
+    if (!enabled) setDelayMs(String(MIN_DELAY))
   }
 
-  const moveSkillStepDown = (id: string) => {
-    const i = skillSteps.findIndex((s) => s.id === id)
-    if (i < 0 || i >= skillSteps.length - 1) return
-    const next = [...skillSteps]
-    ;[next[i], next[i + 1]] = [next[i + 1], next[i]]
-    setSkillSteps(next)
-  }
-
-  const duplicateSkillStep = (id: string) => {
-    const i = skillSteps.findIndex((s) => s.id === id)
-    if (i < 0) return
-    const next = [...skillSteps]
-    next.splice(i + 1, 0, { ...next[i], id: crypto.randomUUID() })
-    setSkillSteps(next)
-  }
-
-  const updateSkillStep = (id: string, patch: { key?: string; ms?: string }) => {
-    setSkillSteps(
-      skillSteps.map((s) => (s.id === id ? ({ ...s, ...patch } as SkillStep) : s)),
-    )
-  }
-
-  // --- Profile CRUD ---
-
-  const addProfile = () => {
-    setProfiles((prev) => {
-      const name = `Profile ${prev.length + 1}`
-      const newProfile: Profile = {
+  // Hotkey CRUD
+  const addHotkey = useCallback(() => {
+    setHotkeys((prev) => [
+      ...prev,
+      {
         id: crypto.randomUUID(),
-        name,
+        name: `Hotkey ${prev.length + 1}`,
         hotkey: "F5",
-        potions: { ...activeProfile.potions },
-        skills: { ...activeProfile.skills, steps: [...activeProfile.skills.steps.map((s) => ({ ...s }))] },
-      }
-      return [...prev, newProfile]
-    })
-  }
+        comboPath: "",
+      },
+    ])
+  }, [])
 
-  const deleteProfile = (id: string) => {
-    setProfiles((prev) => {
+  const deleteHotkey = useCallback((id: string) => {
+    setHotkeys((prev) => {
       if (prev.length <= 1) return prev
       return prev.filter((p) => p.id !== id)
     })
-    if (activeProfileId === id) {
-      const remaining = profiles.filter((p) => p.id !== id)
-      if (remaining.length > 0) setActiveProfileId(remaining[0].id)
-    }
-  }
+  }, [])
 
-  const renameProfile = (id: string, name: string) => {
-    setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)))
-  }
+  const renameHotkey = useCallback((id: string, name: string) => {
+    setHotkeys((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)))
+  }, [])
 
-  const updateProfileHotkey = (id: string, hotkey: string) => {
-    setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, hotkey } : p)))
-  }
+  const updateHotkeyBinding = useCallback((id: string, hotkey: string) => {
+    setHotkeys((prev) => prev.map((p) => (p.id === id ? { ...p, hotkey } : p)))
+  }, [])
 
-  const setProfilesAll = (newProfiles: Profile[]) => {
-    setProfiles(newProfiles)
-    if (newProfiles.length > 0) setActiveProfileId(newProfiles[0].id)
-  }
+  const updateHotkeyPath = useCallback((id: string, comboPath: string) => {
+    setHotkeys((prev) => prev.map((p) => (p.id === id ? { ...p, comboPath } : p)))
+  }, [])
 
-  // --- Global ---
+  // Load combo from a file path into current config
+  const loadComboFromFile = useCallback(async (filePath: string) => {
+    const content = await invoke<string>("read_file", { path: filePath })
+    const combo = importComboFromString(content)
+    setPotionsEnabled(combo.potions.enabled)
+    setPotionKeys(combo.potions.keys)
+    setCustomDelay(combo.potions.customDelay)
+    setDelayMs(combo.potions.delayMs)
+    setPotionsRepeatMode(combo.potions.repeatMode)
+    setPotionsRepeatCount(combo.potions.repeatCount)
+    setSkillsEnabled(combo.skills.enabled)
+    setHoldRightClick(combo.skills.holdRightClick)
+    setSkillSteps(combo.skills.steps)
+    setLabelStyle(combo.skills.labelStyle)
+    setSkillsRepeatMode(combo.skills.repeatMode)
+    setSkillsRepeatCount(combo.skills.repeatCount)
+  }, [])
 
-  const hotkey = activeProfile.hotkey
+  // Apply imported combo to current config
+  const applyCombo = useCallback((combo: { potions: typeof initial.current.potions; skills: typeof initial.current.skills }) => {
+    setPotionsEnabled(combo.potions.enabled)
+    setPotionKeys(combo.potions.keys)
+    setCustomDelay(combo.potions.customDelay)
+    setDelayMs(combo.potions.delayMs)
+    setPotionsRepeatMode(combo.potions.repeatMode)
+    setPotionsRepeatCount(combo.potions.repeatCount)
+    setSkillsEnabled(combo.skills.enabled)
+    setHoldRightClick(combo.skills.holdRightClick)
+    setSkillSteps(combo.skills.steps)
+    setLabelStyle(combo.skills.labelStyle)
+    setSkillsRepeatMode(combo.skills.repeatMode)
+    setSkillsRepeatCount(combo.skills.repeatCount)
+  }, [])
 
-  const setHotkey = (key: string) => updateProfileHotkey(activeProfileId, key)
-
-  const reset = () => {
+  const reset = useCallback(() => {
     const defaults = makeDefaultSettings()
-    setActiveProfileId(defaults.activeProfileId)
-    setProfiles(defaults.profiles)
+    setPotionsEnabled(defaults.current.potions.enabled)
+    setPotionKeys(defaults.current.potions.keys)
+    setCustomDelay(defaults.current.potions.customDelay)
+    setDelayMs(defaults.current.potions.delayMs)
+    setPotionsRepeatMode(defaults.current.potions.repeatMode)
+    setPotionsRepeatCount(defaults.current.potions.repeatCount)
+    setSkillsEnabled(defaults.current.skills.enabled)
+    setHoldRightClick(defaults.current.skills.holdRightClick)
+    setSkillSteps(defaults.current.skills.steps)
+    setLabelStyle(defaults.current.skills.labelStyle)
+    setSkillsRepeatMode(defaults.current.skills.repeatMode)
+    setSkillsRepeatCount(defaults.current.skills.repeatCount)
+    setHotkeys(defaults.hotkeys)
     clearSettings()
     toast("Settings reset to defaults")
-  }
+  }, [])
+
+  // Skill step operations
+  const addSkillKeydown = useCallback(() => {
+    setSkillSteps((prev) => [...prev, { id: crypto.randomUUID(), type: "keydown", key: "" }])
+  }, [])
+
+  const addSkillKeyup = useCallback(() => {
+    setSkillSteps((prev) => [...prev, { id: crypto.randomUUID(), type: "keyup", key: "" }])
+  }, [])
+
+  const addSkillDelay = useCallback(() => {
+    setSkillSteps((prev) => [...prev, { id: crypto.randomUUID(), type: "delay", ms: "100" }])
+  }, [])
+
+  const removeSkillStep = useCallback((id: string) => {
+    setSkillSteps((prev) => prev.filter((s) => s.id !== id))
+  }, [])
+
+  const moveSkillStepUp = useCallback((id: string) => {
+    setSkillSteps((prev) => {
+      const i = prev.findIndex((s) => s.id === id)
+      if (i <= 0) return prev
+      const next = [...prev]
+      ;[next[i - 1], next[i]] = [next[i], next[i - 1]]
+      return next
+    })
+  }, [])
+
+  const moveSkillStepDown = useCallback((id: string) => {
+    setSkillSteps((prev) => {
+      const i = prev.findIndex((s) => s.id === id)
+      if (i < 0 || i >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[i], next[i + 1]] = [next[i + 1], next[i]]
+      return next
+    })
+  }, [])
+
+  const duplicateSkillStep = useCallback((id: string) => {
+    setSkillSteps((prev) => {
+      const i = prev.findIndex((s) => s.id === id)
+      if (i < 0) return prev
+      const next = [...prev]
+      next.splice(i + 1, 0, { ...next[i], id: crypto.randomUUID() })
+      return next
+    })
+  }, [])
+
+  const updateSkillStep = useCallback((id: string, patch: { key?: string; ms?: string }) => {
+    setSkillSteps((prev) =>
+      prev.map((s) => (s.id === id ? ({ ...s, ...patch } as SkillStep) : s)),
+    )
+  }, [])
 
   const buildSettings = useCallback(
     (): SettingsV3 => ({
       version: 3,
-      activeProfileId,
-      profiles,
+      current: {
+        potions: {
+          enabled: potionsEnabled,
+          keys: potionKeys,
+          customDelay,
+          delayMs,
+          repeatMode: potionsRepeatMode,
+          repeatCount: potionsRepeatCount,
+        },
+        skills: {
+          enabled: skillsEnabled,
+          holdRightClick,
+          steps: skillSteps,
+          labelStyle,
+          repeatMode: skillsRepeatMode,
+          repeatCount: skillsRepeatCount,
+        },
+      },
+      hotkeys,
     }),
-    [activeProfileId, profiles],
+    [
+      potionsEnabled, potionKeys, customDelay, delayMs,
+      potionsRepeatMode, potionsRepeatCount,
+      skillsEnabled, holdRightClick, skillSteps, labelStyle,
+      skillsRepeatMode, skillsRepeatCount,
+      hotkeys,
+    ],
   )
 
   useEffect(() => {
@@ -255,64 +262,36 @@ export function useSettings() {
     [holdRightClick, skillSteps, skillsRepeatMode, skillsRepeatCount],
   )
 
+  const hotkey = hotkeys.length > 0 ? hotkeys[0].hotkey : "F5"
+
   return {
-    // Active profile
-    activeProfile,
-    activeProfileId,
-    setActiveProfileId,
-    profiles,
-    // Profile CRUD
-    addProfile,
-    deleteProfile,
-    renameProfile,
-    updateProfileHotkey,
-    setProfilesAll,
-    // Potions (derived)
-    potionsEnabled,
-    setPotionsEnabled,
-    potionKeys,
-    togglePotionKey,
-    customDelay,
-    setCustomDelayEnabled,
-    delayMs,
-    setDelayMs,
-    potionsRepeatMode,
-    setPotionsRepeatMode,
-    potionsRepeatCount,
-    setPotionsRepeatCount,
-    potionsDelayError,
-    potionsRepeatError,
-    potionsCanRun,
-    // Skills (derived)
-    skillsEnabled,
-    setSkillsEnabled,
-    holdRightClick,
-    setHoldRightClick,
-    skillSteps,
-    setSkillSteps,
-    addSkillKeydown,
-    addSkillKeyup,
-    addSkillDelay,
-    removeSkillStep,
-    moveSkillStepUp,
-    moveSkillStepDown,
-    duplicateSkillStep,
-    updateSkillStep,
-    labelStyle,
-    setLabelStyle,
-    skillsRepeatMode,
-    setSkillsRepeatMode,
-    skillsRepeatCount,
-    setSkillsRepeatCount,
-    skillsRepeatError,
-    skillsCanRun,
+    // Potions
+    potionsEnabled, setPotionsEnabled,
+    potionKeys, togglePotionKey,
+    customDelay, setCustomDelayEnabled,
+    delayMs, setDelayMs,
+    potionsRepeatMode, setPotionsRepeatMode,
+    potionsRepeatCount, setPotionsRepeatCount,
+    potionsDelayError, potionsRepeatError, potionsCanRun,
+    // Skills
+    skillsEnabled, setSkillsEnabled,
+    holdRightClick, setHoldRightClick,
+    skillSteps, setSkillSteps,
+    addSkillKeydown, addSkillKeyup, addSkillDelay,
+    removeSkillStep, moveSkillStepUp, moveSkillStepDown,
+    duplicateSkillStep, updateSkillStep,
+    labelStyle, setLabelStyle,
+    skillsRepeatMode, setSkillsRepeatMode,
+    skillsRepeatCount, setSkillsRepeatCount,
+    skillsRepeatError, skillsCanRun,
+    // Hotkeys
+    hotkeys,
+    addHotkey, deleteHotkey, renameHotkey,
+    updateHotkeyBinding, updateHotkeyPath,
+    loadComboFromFile, applyCombo,
     // Global
-    hotkey,
-    setHotkey,
-    canRun,
-    reset,
-    potionsConfig,
-    skillsConfig,
+    hotkey, canRun, reset,
+    potionsConfig, skillsConfig,
     buildSettings,
   }
 }
