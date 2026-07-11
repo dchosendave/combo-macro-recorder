@@ -2,86 +2,163 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { toast } from "sonner"
-import { MIN_DELAY, MIN_REPEAT, type PotionKey, type RepeatMode } from "@/lib/settings"
+import type { PotionKey, RepeatMode } from "@/lib/settings"
+
+type PotionsConfig = {
+  keys: Record<PotionKey, boolean>
+  delayMs: number
+  repeatMode: RepeatMode
+  repeatCount: number
+}
+
+type SkillStepConfig = {
+  type: "keydown" | "keyup";
+  key: string;
+} | {
+  type: "delay";
+  ms: number;
+};
+
+type SkillsConfig = {
+  steps: SkillStepConfig[]
+  repeatMode: RepeatMode
+  repeatCount: number
+}
 
 type UseMacroRunnerArgs = {
-  canRun: boolean
-  keys: Record<PotionKey, boolean>
-  delayMs: string
-  delayError: boolean
-  repeatMode: RepeatMode
-  repeatCount: string
+  potionsCanRun: boolean
+  potionsConfig: PotionsConfig
+  skillsCanRun: boolean
+  skillsConfig: SkillsConfig
 }
 
 export function useMacroRunner({
-  canRun,
-  keys,
-  delayMs,
-  delayError,
-  repeatMode,
-  repeatCount,
+  potionsCanRun,
+  potionsConfig,
+  skillsCanRun,
+  skillsConfig,
 }: UseMacroRunnerArgs) {
-  const [running, setRunning] = useState(false)
+  const [potionsRunning, setPotionsRunning] = useState(false)
+  const [skillsRunning, setSkillsRunning] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const [activations, setActivations] = useState(0)
+  const [potionsCycles, setPotionsCycles] = useState(0)
+  const [skillsCycles, setSkillsCycles] = useState(0)
 
-  const configRef = useRef({ keys, delayMs, delayError, repeatMode, repeatCount })
-  configRef.current = { keys, delayMs, delayError, repeatMode, repeatCount }
+  const anyRunning = potionsRunning || skillsRunning
 
-  const runningRef = useRef(running)
-  runningRef.current = running
+  const potionsRunningRef = useRef(potionsRunning)
+  potionsRunningRef.current = potionsRunning
+  const skillsRunningRef = useRef(skillsRunning)
+  skillsRunningRef.current = skillsRunning
 
-  const canRunRef = useRef(canRun)
-  canRunRef.current = canRun
+  const potionsCanRunRef = useRef(potionsCanRun)
+  potionsCanRunRef.current = potionsCanRun
+  const skillsCanRunRef = useRef(skillsCanRun)
+  skillsCanRunRef.current = skillsCanRun
+
+  const potionsConfigRef = useRef(potionsConfig)
+  potionsConfigRef.current = potionsConfig
+  const skillsConfigRef = useRef(skillsConfig)
+  skillsConfigRef.current = skillsConfig
 
   const toggleRunning = useCallback(() => {
-    if (runningRef.current) {
-      invoke("stop_macro")
-      setRunning(false)
+    if (potionsRunningRef.current || skillsRunningRef.current) {
+      invoke("stop_all")
+      setPotionsRunning(false)
+      setSkillsRunning(false)
       toast("Stopped")
       return
     }
-    if (!canRunRef.current) {
-      toast.warning("Enable at least one potion key first")
+
+    const pCan = potionsCanRunRef.current
+    const sCan = skillsCanRunRef.current
+
+    if (!pCan && !sCan) {
+      toast.warning("Enable at least one channel first")
       return
     }
 
-    const { keys, delayMs, delayError, repeatMode, repeatCount } =
-      configRef.current
-    const step = !delayError && delayMs !== "" ? Number(delayMs) : MIN_DELAY
-    const config = {
-      keys,
-      delayMs: Math.max(MIN_DELAY, step),
-      repeatMode,
-      repeatCount: Math.max(MIN_REPEAT, Number(repeatCount) || MIN_REPEAT),
+    if (pCan) {
+      const c = potionsConfigRef.current
+      invoke("start_potions", {
+        config: {
+          keys: c.keys,
+          delayMs: c.delayMs,
+          repeatMode: c.repeatMode,
+          repeatCount: c.repeatCount,
+        },
+      })
+      setPotionsRunning(true)
     }
-    invoke("start_macro", { config })
-    setRunning(true)
+
+    if (sCan) {
+      const c = skillsConfigRef.current
+      invoke("start_skills", {
+        config: {
+          steps: c.steps,
+          repeatMode: c.repeatMode,
+          repeatCount: c.repeatCount,
+        },
+      })
+      setSkillsRunning(true)
+    }
+
     toast.success("Started")
   }, [])
 
   useEffect(() => {
-    if (!running) return
+    if (!anyRunning) return
     setElapsed(0)
-    setActivations(0)
+    setPotionsCycles(0)
+    setSkillsCycles(0)
     const secondTick = setInterval(() => setElapsed((s) => s + 1), 1000)
     return () => clearInterval(secondTick)
-  }, [running])
+  }, [anyRunning])
 
   useEffect(() => {
-    const unlistenActivation = listen<{ cycle: number }>(
+    const unlistenActivation = listen<{ channel: string; cycle: number }>(
       "macro-activation",
-      (event) => setActivations(event.payload.cycle)
+      (event) => {
+        if (event.payload.channel === "potions") {
+          setPotionsCycles(event.payload.cycle)
+        } else if (event.payload.channel === "skills") {
+          setSkillsCycles(event.payload.cycle)
+        }
+      },
     )
-    const unlistenFinished = listen("macro-finished", () => {
-      setRunning(false)
-      toast("Finished repeat sequence")
-    })
+
+    const unlistenFinished = listen<{ channel: string }>(
+      "macro-finished",
+      (event) => {
+        if (event.payload.channel === "potions") {
+          setPotionsRunning(false)
+        } else if (event.payload.channel === "skills") {
+          setSkillsRunning(false)
+        }
+
+        if (
+          (event.payload.channel === "potions" && !skillsRunningRef.current) ||
+          (event.payload.channel === "skills" && !potionsRunningRef.current)
+        ) {
+          toast("Finished repeat sequence")
+        }
+      },
+    )
+
     return () => {
       unlistenActivation.then((fn) => fn())
       unlistenFinished.then((fn) => fn())
     }
   }, [])
 
-  return { running, setRunning, elapsed, activations, toggleRunning }
+  return {
+    potionsRunning,
+    skillsRunning,
+    anyRunning,
+    elapsed,
+    potionsCycles,
+    skillsCycles,
+    totalCycles: potionsCycles + skillsCycles,
+    toggleRunning,
+  }
 }

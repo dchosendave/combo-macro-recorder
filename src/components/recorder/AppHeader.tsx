@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes"
-import { Moon, RotateCcw, Sun } from "lucide-react"
+import { Download, Moon, RotateCcw, Sun, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -25,6 +25,8 @@ type AppHeaderProps = {
   elapsed: number
   activations: number
   onReset: () => void
+  onExport: () => void
+  onImport: () => void
 }
 
 export function AppHeader({
@@ -32,6 +34,8 @@ export function AppHeader({
   elapsed,
   activations,
   onReset,
+  onExport,
+  onImport,
 }: AppHeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
@@ -43,8 +47,7 @@ export function AppHeader({
         </span>
         <Badge variant={running ? "default" : "secondary"} className="gap-1.5">
           <span
-            className={`size-2 rounded-full ${running ? "bg-green-500" : "bg-muted-foreground"
-              }`}
+            className={`size-2 rounded-full ${running ? "bg-green-500" : "bg-muted-foreground"}`}
           />
           {running ? `Running · ${formatElapsed(elapsed)}` : "Stopped"}
         </Badge>
@@ -55,6 +58,36 @@ export function AppHeader({
         )}
       </div>
       <div className="flex items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Import profile"
+                onClick={onImport}
+              >
+                <Upload className="size-4" />
+              </Button>
+            }
+          />
+          <TooltipContent>Import profile</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Export profile"
+                onClick={onExport}
+              >
+                <Download className="size-4" />
+              </Button>
+            }
+          />
+          <TooltipContent>Export profile</TooltipContent>
+        </Tooltip>
         <AlertDialog>
           <AlertDialogTrigger
             render={
