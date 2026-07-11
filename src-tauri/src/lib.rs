@@ -2,7 +2,8 @@ mod macro_runner;
 
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use macro_runner::{start_macro, stop_macro, AppState};
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 fn press_key(ch: char) -> Result<(), String> {
@@ -19,6 +20,13 @@ fn test_press(key: String) -> Result<(), String> {
     press_key(ch)
 }
 
+#[tauri::command]
+fn set_hotkey(shortcut: String, app: AppHandle) -> Result<(), String> {
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    gs.register(shortcut.as_str()).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -33,14 +41,12 @@ pub fn run() {
                 .build(),
         )
         .manage(AppState::default())
-        .setup(|app| {
-            use tauri_plugin_global_shortcut::GlobalShortcutExt;
-            if let Err(e) = app.global_shortcut().register("F5") {
-                eprintln!("[global-shortcut] failed to register F5: {e}");
-            }
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![test_press, start_macro, stop_macro])
+        .invoke_handler(tauri::generate_handler![
+            test_press,
+            start_macro,
+            stop_macro,
+            set_hotkey
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

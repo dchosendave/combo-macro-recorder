@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
+import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { AppHeader } from "@/components/recorder/AppHeader"
 import { KeysTab } from "@/components/recorder/KeysTab"
@@ -9,6 +11,7 @@ import { DevVisualizer } from "@/components/recorder/DevVisualizer"
 import { useSettings } from "@/hooks/useSettings"
 import { useMacroRunner } from "@/hooks/useMacroRunner"
 import { useHotkey } from "@/hooks/useHotkey"
+import { toAccelerator } from "@/lib/settings"
 import "./App.css"
 
 function App() {
@@ -26,11 +29,9 @@ function App() {
     })
 
   useHotkey({
-    hotkey: settings.hotkey,
     setHotkey: settings.setHotkey,
     capturing,
     setCapturing,
-    onToggle: toggleRunning,
   })
 
   const handleReset = () => {
@@ -46,6 +47,12 @@ function App() {
       unlisten.then((fn) => fn())
     }
   }, [toggleRunning])
+
+  useEffect(() => {
+    invoke("set_hotkey", { shortcut: toAccelerator(settings.hotkey) }).catch(
+      () => toast.warning(`"${settings.hotkey}" can't be used as a global hotkey`)
+    )
+  }, [settings.hotkey])
 
   return (
     <main className="flex min-h-screen flex-col gap-4 p-4">

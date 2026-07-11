@@ -53,3 +53,27 @@ export function formatElapsed(seconds: number) {
   const s = seconds % 60
   return m > 0 ? `${m}m ${s.toString().padStart(2, "0")}s` : `${s}s`
 }
+
+const SPECIAL_ACCELERATORS: Record<string, string> = {
+  " ": "Space",
+  ArrowUp: "Up",
+  ArrowDown: "Down",
+  ArrowLeft: "Left",
+  ArrowRight: "Right",
+  Escape: "Escape",
+  Enter: "Enter",
+  Tab: "Tab",
+  Backspace: "Backspace",
+  Delete: "Delete",
+}
+
+// Convert a DOM KeyboardEvent.key into a Tauri global-shortcut accelerator.
+export function toAccelerator(key: string): string {
+  if (/^F\d{1,2}$/.test(key)) return key
+  if (key.length === 1) {
+    if (/[a-zA-Z]/.test(key)) return key.toUpperCase()
+    if (/[0-9]/.test(key)) return key
+  }
+  return SPECIAL_ACCELERATORS[key] ?? key
+}
+
