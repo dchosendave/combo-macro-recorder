@@ -1,4 +1,4 @@
-# Combo Macro Recorder
+# Hamin Macro Recorder
 
 A Tauri + React + TypeScript desktop app for auto-pressing QWER potion keys (targeting MU Online).
 

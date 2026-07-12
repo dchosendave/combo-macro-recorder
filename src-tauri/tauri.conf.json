@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "combo-macro-recorder",
+  "productName": "Hamin Macro Recorder",
   "version": "0.1.0",
   "identifier": "com.lowie.combo-macro-recorder",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MU Online Macro - Hamin V1.0",
+        "title": "Hamin Macro Recorder",
         "width": 660,
         "height": 720,
         "minWidth": 660,

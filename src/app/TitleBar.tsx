@@ -37,7 +37,7 @@ export function TitleBar() {
         data-tauri-drag-region
         className="pl-3 text-xs font-medium text-muted-foreground"
       >
-        Combo Macro Recorder
+        Hamin Macro Recorder
       </span>
 
       <div className="ml-auto flex h-full">

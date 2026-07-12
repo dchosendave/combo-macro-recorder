@@ -24,7 +24,7 @@ export function StartupDialog({ open, onOpen, onNew }: StartupDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Welcome to Combo Macro Recorder</DialogTitle>
+          <DialogTitle>Welcome to Hamin Macro Recorder</DialogTitle>
           <DialogDescription>
             Load an existing combo file or start a new one.
           </DialogDescription>
