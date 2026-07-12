@@ -1,56 +1,10 @@
-mod macro_runner;
+mod commands;
+mod runner;
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-use macro_runner::{
-    init_timing, read_file, save_file, start_all, start_potions, start_skills, stop_all,
-    stop_potions, stop_skills, AppState,
-};
-use serde::Deserialize;
-use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct HotkeyMapping {
-    shortcut: String,
-    hotkey_id: String,
-}
-
-struct HotkeyState {
-    mappings: Mutex<HashMap<String, String>>,
-}
-
-fn press_key(ch: char) -> Result<(), String> {
-    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-    enigo
-        .key(Key::Unicode(ch), Direction::Click)
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-fn test_press(key: String) -> Result<(), String> {
-    let ch = key.chars().next().ok_or("empty key")?;
-    press_key(ch)
-}
-
-#[tauri::command]
-fn set_hotkeys(hotkeys: Vec<HotkeyMapping>, app: AppHandle, state: State<'_, HotkeyState>) -> Result<(), String> {
-    let gs = app.global_shortcut();
-    let _ = gs.unregister_all();
-
-    let mut mappings = state.mappings.lock().unwrap();
-    mappings.clear();
-
-    for h in &hotkeys {
-        gs.register(h.shortcut.as_str()).map_err(|e| e.to_string())?;
-        mappings.insert(h.shortcut.clone(), h.hotkey_id.clone());
-    }
-    Ok(())
-}
+use commands::files::{read_file, save_file};
+use commands::hotkeys::{set_hotkeys, HotkeyState};
+use runner::{init_timing, start_potions, start_skills, stop_all, AppState};
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -76,16 +30,10 @@ pub fn run() {
                 .build(),
         )
         .manage(AppState::default())
-        .manage(HotkeyState {
-            mappings: Mutex::new(HashMap::new()),
-        })
+        .manage(HotkeyState::default())
         .invoke_handler(tauri::generate_handler![
-            test_press,
             start_potions,
-            stop_potions,
             start_skills,
-            stop_skills,
-            start_all,
             stop_all,
             save_file,
             read_file,
