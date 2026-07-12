@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
-import { MIN_DELAY, MIN_REPEAT } from "@/shared/lib/defaults"
+import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/lib/defaults"
 import type { PotionConfig, PotionKey, RepeatMode } from "@/shared/lib/types"
 
 export function usePotionSettings(initial: PotionConfig) {
@@ -53,7 +53,7 @@ export function usePotionSettings(initial: PotionConfig) {
       keys: potionKeys,
       delayMs: !potionsDelayError && delayMs !== "" ? Number(delayMs) : MIN_DELAY,
       repeatMode: potionsRepeatMode,
-      repeatCount: Math.max(MIN_REPEAT, Number(potionsRepeatCount) || MIN_REPEAT),
+      repeatCount: Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(potionsRepeatCount) || MIN_REPEAT)),
     }),
     [potionKeys, delayMs, potionsDelayError, potionsRepeatMode, potionsRepeatCount],
   )

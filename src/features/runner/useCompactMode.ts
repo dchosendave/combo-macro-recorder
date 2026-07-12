@@ -14,6 +14,7 @@ export function useCompactMode() {
   compactModeRef.current = compactMode
 
   const enterCompact = useCallback(async () => {
+    if (compactModeRef.current) return
     try {
       const win = getCurrentWindow()
       const current = await win.innerSize()

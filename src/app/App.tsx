@@ -33,6 +33,8 @@ function App() {
     elapsed,
     totalCycles,
     toggleRunning,
+    startCombo,
+    stopAll,
   } = useMacroRunner({
     potionsCanRun: settings.potionsCanRun,
     potionsConfig: settings.potionsConfig,
@@ -64,6 +66,8 @@ function App() {
   useGlobalHotkeys({
     hotkeys: settings.hotkeys,
     toggleRunning,
+    startCombo,
+    stopAll,
     applyCombo: settings.applyCombo,
     runningProfileIdRef,
   })
@@ -101,7 +105,7 @@ function App() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <TitleBar />
       <main className="flex flex-1 min-h-0 flex-col gap-4 p-4">
         <AppHeader

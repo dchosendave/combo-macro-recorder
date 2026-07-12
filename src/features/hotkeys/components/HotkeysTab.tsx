@@ -68,7 +68,7 @@ export function HotkeysTab({
 
   return (
     <Card size="sm" className="h-full" onKeyDown={handleKeyCapture} tabIndex={0}>
-      <CardContent className="flex flex-col gap-3 overflow-y-auto">
+      <CardContent className="flex flex-1 flex-col gap-3 min-h-0 overflow-y-auto">
         <div className="flex flex-col gap-2">
           {hotkeys.map((binding) => (
             <div

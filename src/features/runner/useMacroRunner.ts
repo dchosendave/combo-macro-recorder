@@ -2,35 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { toast } from "sonner"
-import type { PotionKey, RepeatMode } from "@/shared/lib/types"
-
-type PotionsConfig = {
-  keys: Record<PotionKey, boolean>
-  delayMs: number
-  repeatMode: RepeatMode
-  repeatCount: number
-}
-
-type SkillStepConfig = {
-  type: "keydown" | "keyup";
-  key: string;
-} | {
-  type: "delay";
-  ms: number;
-};
-
-type SkillsConfig = {
-  holdRightClick: boolean
-  steps: SkillStepConfig[]
-  repeatMode: RepeatMode
-  repeatCount: number
-}
+import type {
+  PotionsRunConfig,
+  RunnerInputs,
+  SkillsRunConfig,
+} from "@/features/runner/lib/runnerInputs"
 
 type UseMacroRunnerArgs = {
   potionsCanRun: boolean
-  potionsConfig: PotionsConfig
+  potionsConfig: PotionsRunConfig
   skillsCanRun: boolean
-  skillsConfig: SkillsConfig
+  skillsConfig: SkillsRunConfig
   onStart?: () => void
   onStop?: () => void
 }
@@ -71,51 +53,46 @@ export function useMacroRunner({
   const onStopRef = useRef(onStop)
   onStopRef.current = onStop
 
-  const toggleRunning = useCallback(() => {
-    if (potionsRunningRef.current || skillsRunningRef.current) {
-      invoke("stop_all")
-      setPotionsRunning(false)
-      setSkillsRunning(false)
-      onStopRef.current?.()
-      return
-    }
+  // Starts an explicit combo atomically (stop both + start the enabled channels
+  // in a single backend command). Does not depend on React state having
+  // re-rendered, so it is safe to call right after loading a combo file.
+  const startCombo = useCallback((inputs: RunnerInputs) => {
+    const potions = inputs.potionsCanRun ? inputs.potionsConfig : null
+    const skills = inputs.skillsCanRun ? inputs.skillsConfig : null
 
-    const pCan = potionsCanRunRef.current
-    const sCan = skillsCanRunRef.current
-
-    if (!pCan && !sCan) {
+    if (!potions && !skills) {
       toast.warning("Enable at least one channel first")
       return
     }
 
-    if (pCan) {
-      const c = potionsConfigRef.current
-      invoke("start_potions", {
-        config: {
-          keys: c.keys,
-          delayMs: c.delayMs,
-          repeatMode: c.repeatMode,
-          repeatCount: c.repeatCount,
-        },
-      })
-      setPotionsRunning(true)
-    }
-
-    if (sCan) {
-      const c = skillsConfigRef.current
-      invoke("start_skills", {
-        config: {
-          holdRightClick: c.holdRightClick,
-          steps: c.steps,
-          repeatMode: c.repeatMode,
-          repeatCount: c.repeatCount,
-        },
-      })
-      setSkillsRunning(true)
-    }
-
+    invoke("start_combo", { potions, skills })
+    setPotionsRunning(!!potions)
+    setSkillsRunning(!!skills)
     onStartRef.current?.()
   }, [])
+
+  const stopAll = useCallback(() => {
+    invoke("stop_all")
+    setPotionsRunning(false)
+    setSkillsRunning(false)
+    onStopRef.current?.()
+  }, [])
+
+  // Toggle for the current UI combo (used by the on-screen STOP and by hotkeys
+  // that have no combo file attached). The live config refs already reflect the
+  // tabs, so there is no load race here.
+  const toggleRunning = useCallback(() => {
+    if (potionsRunningRef.current || skillsRunningRef.current) {
+      stopAll()
+      return
+    }
+    startCombo({
+      potionsConfig: potionsConfigRef.current,
+      potionsCanRun: potionsCanRunRef.current,
+      skillsConfig: skillsConfigRef.current,
+      skillsCanRun: skillsCanRunRef.current,
+    })
+  }, [startCombo, stopAll])
 
   useEffect(() => {
     if (!anyRunning) return
@@ -171,5 +148,7 @@ export function useMacroRunner({
     skillsCycles,
     totalCycles: potionsCycles + skillsCycles,
     toggleRunning,
+    startCombo,
+    stopAll,
   }
 }

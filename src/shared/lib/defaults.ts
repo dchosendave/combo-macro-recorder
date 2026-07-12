@@ -7,6 +7,7 @@ import type {
 
 export const MIN_DELAY = 2
 export const MIN_REPEAT = 1
+export const MAX_REPEAT = 999999
 
 export function defaultPotionConfig(): PotionConfig {
   return {

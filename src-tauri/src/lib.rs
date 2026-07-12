@@ -3,7 +3,7 @@ mod runner;
 
 use commands::files::{read_file, save_file};
 use commands::hotkeys::{set_hotkeys, HotkeyState};
-use runner::{init_timing, start_potions, start_skills, stop_all, AppState};
+use runner::{init_timing, start_combo, stop_all, AppState};
 use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,8 +32,7 @@ pub fn run() {
         .manage(AppState::default())
         .manage(HotkeyState::default())
         .invoke_handler(tauri::generate_handler![
-            start_potions,
-            start_skills,
+            start_combo,
             stop_all,
             save_file,
             read_file,

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
-import { MIN_REPEAT } from "@/shared/lib/defaults"
+import { MAX_REPEAT, MIN_REPEAT } from "@/shared/lib/defaults"
 import type {
   RepeatMode,
   SkillConfig,
@@ -106,7 +106,7 @@ export function useSkillSettings(initial: SkillConfig) {
         return { type: s.type as "keydown" | "keyup", key: s.key.trim() }
       }),
       repeatMode: skillsRepeatMode,
-      repeatCount: Math.max(MIN_REPEAT, Number(skillsRepeatCount) || MIN_REPEAT),
+      repeatCount: Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(skillsRepeatCount) || MIN_REPEAT)),
     }),
     [holdRightClick, skillSteps, skillsRepeatMode, skillsRepeatCount],
   )

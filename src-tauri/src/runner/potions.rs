@@ -4,10 +4,10 @@ use std::thread;
 
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use serde::Deserialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter};
 
 use super::timing::{set_high_priority, sleep_precise};
-use super::{stop_channel, AppState};
+use super::AppState;
 
 #[derive(Deserialize, Clone)]
 struct Keys {
@@ -97,13 +97,13 @@ fn run_potions(config: PotionConfig, app: AppHandle, running: Arc<AtomicBool>) {
     }
 }
 
-#[tauri::command]
-pub fn start_potions(config: PotionConfig, app: AppHandle, state: State<'_, AppState>) {
-    stop_channel(&state.potions);
-
+/// Spawns the potions loop on a dedicated thread. The caller is responsible for
+/// stopping the channel beforehand (see `start_combo`).
+pub(crate) fn spawn_potions(config: PotionConfig, app: &AppHandle, state: &AppState) {
     let running = state.potions.running.clone();
     running.store(true, Ordering::SeqCst);
 
+    let app = app.clone();
     let handle = thread::spawn(move || run_potions(config, app, running));
 
     *state.potions.handle.lock().unwrap() = Some(handle);

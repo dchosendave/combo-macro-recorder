@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ArrowDown, ArrowUp, ClipboardPaste, Copy, Lock, LockOpen, Plus, Trash2, Wand2 } from "lucide-react"
+import { ArrowDown, ArrowUp, ClipboardPaste, Copy, GripVertical, Lock, LockOpen, Plus, Trash2, Wand2 } from "lucide-react"
 import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from "@/shared/components/ui/dialog"
 import { toast } from "sonner"
+import { MAX_REPEAT } from "@/shared/lib/defaults"
 import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/lib/types"
 import { parseCombo, parseJitbit } from "@/features/skills/lib/parsers"
 
@@ -82,6 +83,43 @@ export function SkillsTab({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [locked, setLocked] = useState(true)
 
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [dropPosition, setDropPosition] = useState<"above" | "below">("below")
+
+  const clearDrag = () => {
+    setDraggingId(null)
+    setDragOverId(null)
+  }
+
+  const reorderStep = (fromId: string, toId: string, position: "above" | "below") => {
+    if (fromId === toId) return
+    const from = steps.findIndex((s) => s.id === fromId)
+    if (from < 0) return
+    const next = [...steps]
+    const [moved] = next.splice(from, 1)
+    const toIdx = next.findIndex((s) => s.id === toId)
+    if (toIdx < 0) return
+    next.splice(position === "below" ? toIdx + 1 : toIdx, 0, moved)
+    onSetSteps(next)
+  }
+
+  const handleRowDragOver = (e: React.DragEvent<HTMLDivElement>, stepId: string) => {
+    if (!draggingId || draggingId === stepId) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    const rect = e.currentTarget.getBoundingClientRect()
+    const isAbove = e.clientY < rect.top + rect.height / 2
+    setDragOverId(stepId)
+    setDropPosition(isAbove ? "above" : "below")
+  }
+
+  const handleRowDrop = (e: React.DragEvent<HTMLDivElement>, stepId: string) => {
+    e.preventDefault()
+    if (draggingId) reorderStep(draggingId, stepId, dropPosition)
+    clearDrag()
+  }
+
   const labelText = (type: SkillStep["type"]) => {
     if (labelStyle === "icon") {
       return type === "keydown" ? "↓" : type === "keyup" ? "↑" : "⏱"
@@ -116,7 +154,7 @@ export function SkillsTab({
 
   return (
     <Card size="sm" className="h-full">
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-1 flex-col gap-3 min-h-0">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="enable-skills" className="font-normal">
             Enable skills channel
@@ -303,15 +341,46 @@ export function SkillsTab({
                   {steps.map((step, i) => (
                     <div
                       key={step.id}
+                      data-step-row
                       onClick={() =>
                         setSelectedId((prev) => (prev === step.id ? null : step.id))
                       }
+                      onDragOver={(e) => handleRowDragOver(e, step.id)}
+                      onDrop={(e) => handleRowDrop(e, step.id)}
+                      onDragEnd={clearDrag}
                       className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1 transition-colors ${
+                        draggingId === step.id ? "opacity-50" : ""
+                      } ${
+                        dragOverId === step.id
+                          ? dropPosition === "above"
+                            ? "border-t-2 border-t-primary"
+                            : "border-b-2 border-b-primary"
+                          : ""
+                      } ${
                         selectedId === step.id
                           ? "border-primary bg-primary/10 ring-1 ring-primary"
                           : "hover:bg-muted/50"
                       }`}
                     >
+                      {!locked && (
+                        <span
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggingId(step.id)
+                            e.dataTransfer.effectAllowed = "move"
+                            e.dataTransfer.setData("text/plain", step.id)
+                            const row = (e.currentTarget.closest("[data-step-row]") ??
+                              e.currentTarget) as HTMLElement
+                            e.dataTransfer.setDragImage(row, 12, 12)
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex shrink-0 cursor-grab items-center text-muted-foreground active:cursor-grabbing"
+                          aria-label="Drag to reorder"
+                        >
+                          <GripVertical className="size-3.5" />
+                        </span>
+                      )}
+
                       <span className="w-8 shrink-0 text-center text-xs font-medium text-muted-foreground">
                         {labelText(step.type)}
                       </span>
@@ -466,9 +535,14 @@ export function SkillsTab({
                     inputMode="numeric"
                     aria-invalid={repeatError}
                     value={repeatCount}
-                    onChange={(e) =>
-                      setRepeatCount(e.target.value.replace(/[^0-9]/g, ""))
-                    }
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^0-9]/g, "")
+                      setRepeatCount(
+                        digits !== "" && Number(digits) > MAX_REPEAT
+                          ? String(MAX_REPEAT)
+                          : digits,
+                      )
+                    }}
                     placeholder="1"
                     className="w-20"
                   />

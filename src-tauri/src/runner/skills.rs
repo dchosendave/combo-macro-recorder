@@ -4,10 +4,10 @@ use std::thread;
 
 use enigo::{Button, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use serde::Deserialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter};
 
 use super::timing::{set_high_priority, sleep_precise};
-use super::{stop_channel, AppState};
+use super::AppState;
 
 #[derive(Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -104,10 +104,9 @@ fn run_skills(config: SkillConfig, app: AppHandle, running: Arc<AtomicBool>) {
     }
 }
 
-#[tauri::command]
-pub fn start_skills(config: SkillConfig, app: AppHandle, state: State<'_, AppState>) {
-    stop_channel(&state.skills);
-
+/// Spawns the skills loop on a dedicated thread. The caller is responsible for
+/// stopping the channel beforehand (see `start_combo`).
+pub(crate) fn spawn_skills(config: SkillConfig, app: &AppHandle, state: &AppState) {
     if config.steps.is_empty() {
         return;
     }
@@ -115,6 +114,7 @@ pub fn start_skills(config: SkillConfig, app: AppHandle, state: State<'_, AppSta
     let running = state.skills.running.clone();
     running.store(true, Ordering::SeqCst);
 
+    let app = app.clone();
     let handle = thread::spawn(move || run_skills(config, app, running));
 
     *state.skills.handle.lock().unwrap() = Some(handle);

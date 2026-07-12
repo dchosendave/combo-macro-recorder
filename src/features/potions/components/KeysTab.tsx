@@ -5,7 +5,7 @@ import { Kbd } from "@/shared/components/ui/kbd"
 import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/shared/components/ui/toggle-group"
-import { MIN_DELAY } from "@/shared/lib/defaults"
+import { MAX_REPEAT, MIN_DELAY } from "@/shared/lib/defaults"
 import { type PotionKey, type RepeatMode } from "@/shared/lib/types"
 
 const POTION_KEYS: PotionKey[] = ["q", "w", "e", "r"]
@@ -45,7 +45,7 @@ export function KeysTab({
 }: KeysTabProps) {
   return (
     <Card size="sm" className="h-full">
-      <CardContent className="flex flex-col gap-4 overflow-y-auto">
+      <CardContent className="flex flex-1 flex-col gap-4 min-h-0 overflow-y-auto">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="enable-qwer" className="font-normal">
             Enable QWER keys for auto potions
@@ -140,9 +140,14 @@ export function KeysTab({
                 inputMode="numeric"
                 aria-invalid={repeatError}
                 value={repeatCount}
-                onChange={(e) =>
-                  setRepeatCount(e.target.value.replace(/[^0-9]/g, ""))
-                }
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "")
+                  setRepeatCount(
+                    digits !== "" && Number(digits) > MAX_REPEAT
+                      ? String(MAX_REPEAT)
+                      : digits,
+                  )
+                }}
                 placeholder="1"
                 className="w-20"
               />
