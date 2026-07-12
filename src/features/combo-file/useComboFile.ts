@@ -11,11 +11,12 @@ const EMPTY_BASELINE = exportComboToString({ potions: defaultPotionConfig(), ski
 type UseComboFileArgs = {
   getCombo: () => CurrentCombo
   applyCombo: (combo: CurrentCombo) => void
+  onSave?: (path: string) => void
 }
 
 type PendingAction = "open" | "new"
 
-export function useComboFile({ getCombo, applyCombo }: UseComboFileArgs) {
+export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs) {
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [baseline, setBaseline] = useState(EMPTY_BASELINE)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
@@ -71,6 +72,7 @@ export function useComboFile({ getCombo, applyCombo }: UseComboFileArgs) {
       await invoke("save_file", { path, content: json })
       setCurrentFilePath(path)
       setBaseline(json)
+      onSave?.(path)
     },
     [],
   )

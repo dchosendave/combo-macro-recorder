@@ -50,9 +50,16 @@ export function HotkeysTab({
       setCapturingId(null)
       return
     }
-    if (e.code) {
-      onUpdateHotkey(capturingId, e.code)
+    if (["ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight", "MetaLeft", "MetaRight"].includes(e.code)) {
+      return
     }
+    const parts: string[] = []
+    if (e.ctrlKey) parts.push("Control")
+    if (e.altKey) parts.push("Alt")
+    if (e.shiftKey) parts.push("Shift")
+    if (e.metaKey) parts.push("Meta")
+    parts.push(e.code)
+    onUpdateHotkey(capturingId, parts.join("+"))
     setCapturingId(null)
   }
 

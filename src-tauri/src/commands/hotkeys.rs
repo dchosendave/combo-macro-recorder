@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Mutex;
 
 use serde::Deserialize;
 use tauri::{AppHandle, State};
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -31,7 +32,10 @@ pub fn set_hotkeys(
 
     for h in &hotkeys {
         gs.register(h.shortcut.as_str()).map_err(|e| e.to_string())?;
-        mappings.insert(h.shortcut.clone(), h.hotkey_id.clone());
+        let key = Shortcut::from_str(&h.shortcut)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|_| h.shortcut.clone());
+        mappings.insert(key, h.hotkey_id.clone());
     }
     Ok(())
 }

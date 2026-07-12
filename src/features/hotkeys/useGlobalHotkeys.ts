@@ -74,6 +74,10 @@ export function useGlobalHotkeys({
     }
   }, [comboPathsKey])
 
+  const clearCachedCombo = (path: string) => {
+    comboCacheRef.current.delete(path)
+  }
+
   useEffect(() => {
     const unlisten = listen<string>("macro-toggle", async (event) => {
       const profile = hotkeys.find((p) => p.id === event.payload)
@@ -119,4 +123,6 @@ export function useGlobalHotkeys({
       unlisten.then((fn) => fn())
     }
   }, [hotkeys, toggleRunning, startCombo, stopAll, applyCombo, runningProfileIdRef])
+
+  return { clearCachedCombo }
 }

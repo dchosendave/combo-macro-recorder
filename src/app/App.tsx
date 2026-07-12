@@ -49,6 +49,15 @@ function App() {
     [settings.buildSettings],
   )
 
+  const { clearCachedCombo } = useGlobalHotkeys({
+    hotkeys: settings.hotkeys,
+    toggleRunning,
+    startCombo,
+    stopAll,
+    applyCombo: settings.applyCombo,
+    runningProfileIdRef,
+  })
+
   const {
     currentFilePath,
     openFile,
@@ -61,16 +70,7 @@ function App() {
     requestNew,
     confirmDiscard,
     cancelDiscard,
-  } = useComboFile({ getCombo, applyCombo: settings.applyCombo })
-
-  useGlobalHotkeys({
-    hotkeys: settings.hotkeys,
-    toggleRunning,
-    startCombo,
-    stopAll,
-    applyCombo: settings.applyCombo,
-    runningProfileIdRef,
-  })
+  } = useComboFile({ getCombo, applyCombo: settings.applyCombo, onSave: clearCachedCombo })
 
   const [showStartup, setShowStartup] = useState(true)
 
