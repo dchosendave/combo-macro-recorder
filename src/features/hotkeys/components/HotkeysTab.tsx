@@ -70,6 +70,18 @@ export function HotkeysTab({
     })
     if (path) {
       onUpdatePath(bindingId, path as string)
+      const binding = hotkeys.find((h) => h.id === bindingId)
+      if (binding) {
+        const isDefaultName =
+          binding.name === "Untitled" || /^Hotkey \d+$/.test(binding.name)
+        if (isDefaultName) {
+          const basename = (path as string).split(/[\\/]/).pop() ?? ""
+          const derived = basename.replace(/\.json$/i, "")
+          if (derived) {
+            onRenameHotkey(bindingId, derived)
+          }
+        }
+      }
     }
   }
 
