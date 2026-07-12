@@ -4,7 +4,7 @@ import { LogicalSize } from "@tauri-apps/api/dpi"
 import { toast } from "sonner"
 
 const COMPACT = new LogicalSize(500, 68)
-const MIN_CONSTRAINTS = { minWidth: 520, minHeight: 640 }
+const MIN_CONSTRAINTS = { minWidth: 660, minHeight: 720 }
 
 export function useCompactMode() {
   const [compactMode, setCompactMode] = useState(false)

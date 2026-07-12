@@ -15,8 +15,8 @@
         "title": "MU Online Macro - Hamin V1.0",
         "width": 660,
         "height": 720,
-        "minWidth": 520,
-        "minHeight": 640,
+        "minWidth": 660,
+        "minHeight": 720,
         "resizable": true,
         "decorations": false
       }
