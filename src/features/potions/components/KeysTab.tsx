@@ -4,8 +4,8 @@ import { Input } from "@/shared/components/ui/input"
 import { Kbd } from "@/shared/components/ui/kbd"
 import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
-import { ToggleGroup, ToggleGroupItem } from "@/shared/components/ui/toggle-group"
-import { MAX_REPEAT, MIN_DELAY } from "@/shared/lib/defaults"
+import { RepeatModeControl } from "@/shared/components/RepeatModeControl"
+import { MIN_DELAY } from "@/shared/lib/defaults"
 import { type PotionKey, type RepeatMode } from "@/shared/lib/types"
 
 const POTION_KEYS: PotionKey[] = ["q", "w", "e", "r"]
@@ -58,11 +58,11 @@ export function KeysTab({
         </div>
 
         {autoPotions ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
             {POTION_KEYS.map((key) => (
               <div
                 key={key}
-                className="flex items-center justify-between gap-2 rounded-2xl border px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2 transition-colors cursor-pointer"
               >
                 <span className="flex items-center gap-2 text-sm">
                   <Kbd>{key.toUpperCase()}</Kbd>
@@ -121,47 +121,13 @@ export function KeysTab({
 
         <Separator />
 
-        <div className="flex flex-col gap-2">
-          <Label className="font-normal">Repeat mode</Label>
-          <div className="flex items-center gap-2">
-            <ToggleGroup
-              value={[repeatMode]}
-              onValueChange={(v) => {
-                const next = v[0] as RepeatMode | undefined
-                if (next) setRepeatMode(next)
-              }}
-              variant="outline"
-            >
-              <ToggleGroupItem value="loop">Loop</ToggleGroupItem>
-              <ToggleGroupItem value="count">Repeat N</ToggleGroupItem>
-            </ToggleGroup>
-            {repeatMode === "count" && (
-              <Input
-                inputMode="numeric"
-                aria-invalid={repeatError}
-                value={repeatCount}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/[^0-9]/g, "")
-                  setRepeatCount(
-                    digits !== "" && Number(digits) > MAX_REPEAT
-                      ? String(MAX_REPEAT)
-                      : digits,
-                  )
-                }}
-                placeholder="1"
-                className="w-20"
-              />
-            )}
-          </div>
-          {repeatMode === "count" && (
-            <p
-              className={`text-xs ${repeatError ? "text-destructive" : "text-muted-foreground"
-                }`}
-            >
-              {repeatError ? "Minimum is 1." : "How many times to repeat."}
-            </p>
-          )}
-        </div>
+        <RepeatModeControl
+          repeatMode={repeatMode}
+          setRepeatMode={setRepeatMode}
+          repeatCount={repeatCount}
+          setRepeatCount={setRepeatCount}
+          repeatError={repeatError}
+        />
       </CardContent>
     </Card>
   )

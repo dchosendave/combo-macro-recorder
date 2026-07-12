@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 
-export function TitleBar() {
+export function TitleBar({ onRequestClose }: { onRequestClose: () => void }) {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -24,23 +24,20 @@ export function TitleBar() {
     getCurrentWindow().toggleMaximize()
   }, [])
 
-  const handleClose = useCallback(() => {
-    getCurrentWindow().close()
-  }, [])
+    const handleClose = useCallback(() => {
+    onRequestClose()
+  }, [onRequestClose])
 
   return (
-    <div
-      data-tauri-drag-region
-      className="flex h-8 shrink-0 items-center select-none"
-    >
+    <div className="flex h-8 shrink-0 items-center select-none">
       <span
         data-tauri-drag-region
-        className="pl-3 text-xs font-medium text-muted-foreground"
+        className="flex-1 pl-3 text-xs font-medium text-muted-foreground h-full flex items-center"
       >
         Hamin Macro Recorder
       </span>
 
-      <div className="ml-auto flex h-full">
+      <div className="flex h-full shrink-0">
         <button
           onClick={handleMinimize}
           className="flex h-full w-[46px] items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

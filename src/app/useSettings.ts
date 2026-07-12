@@ -72,6 +72,7 @@ export function useSettings() {
     hotkeys: hotkeysFeature.hotkeys,
     addHotkey: hotkeysFeature.addHotkey, deleteHotkey: hotkeysFeature.deleteHotkey, renameHotkey: hotkeysFeature.renameHotkey,
     updateHotkeyBinding: hotkeysFeature.updateHotkeyBinding, updateHotkeyPath: hotkeysFeature.updateHotkeyPath,
+    moveHotkeyUp: hotkeysFeature.moveHotkeyUp, moveHotkeyDown: hotkeysFeature.moveHotkeyDown,
     applyCombo,
     // Global
     hotkey: hotkeysFeature.hotkey, canRun, reset,

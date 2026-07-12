@@ -1,6 +1,7 @@
 export type PotionKey = "q" | "w" | "e" | "r"
 export type RepeatMode = "loop" | "count"
 export type StepLabelStyle = "abbreviation" | "icon"
+export type CompactCorner = "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left"
 
 export type SkillStep =
   | { id: string; type: "keydown"; key: string }

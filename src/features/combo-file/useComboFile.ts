@@ -156,7 +156,7 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
     currentFilePath, setCurrentFilePath,
     openFile, saveFile, saveFileAs,
     newCombo: doNew,
-    isDirty,
+    isDirty, isProcessing,
     pendingAction,
     requestOpen, requestNew,
     confirmDiscard, cancelDiscard,

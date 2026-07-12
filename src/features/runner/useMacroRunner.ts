@@ -65,7 +65,12 @@ export function useMacroRunner({
       return
     }
 
-    invoke("start_combo", { potions, skills })
+    invoke("start_combo", { potions, skills }).catch((e) => {
+      setPotionsRunning(false)
+      setSkillsRunning(false)
+      onStopRef.current?.()
+      toast.error(`Failed to start macro: ${e}`)
+    })
     setPotionsRunning(!!potions)
     setSkillsRunning(!!skills)
     onStartRef.current?.()

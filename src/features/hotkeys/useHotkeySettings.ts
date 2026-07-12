@@ -35,12 +35,33 @@ export function useHotkeySettings(initial: HotkeyBinding[]) {
     setHotkeys((prev) => prev.map((p) => (p.id === id ? { ...p, comboPath } : p)))
   }, [])
 
+  const moveHotkeyUp = useCallback((id: string) => {
+    setHotkeys((prev) => {
+      const idx = prev.findIndex((p) => p.id === id)
+      if (idx <= 0) return prev
+      const next = [...prev]
+      ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
+      return next
+    })
+  }, [])
+
+  const moveHotkeyDown = useCallback((id: string) => {
+    setHotkeys((prev) => {
+      const idx = prev.findIndex((p) => p.id === id)
+      if (idx < 0 || idx >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[idx + 1], next[idx]] = [next[idx], next[idx + 1]]
+      return next
+    })
+  }, [])
+
   const hotkey = hotkeys.length > 0 ? hotkeys[0].hotkey : "F5"
 
   return {
     hotkeys, setHotkeys,
     addHotkey, deleteHotkey, renameHotkey,
     updateHotkeyBinding, updateHotkeyPath,
+    moveHotkeyUp, moveHotkeyDown,
     hotkey,
     persisted: hotkeys,
   }

@@ -25,6 +25,7 @@ type AppHeaderProps = {
   elapsed: number
   fileName: string | null
   isDirty: boolean
+  isProcessing: boolean
   onReset: () => void
   onOpen: () => void
   onNew: () => void
@@ -37,6 +38,7 @@ export function AppHeader({
   elapsed,
   fileName,
   isDirty,
+  isProcessing,
   onReset,
   onOpen,
   onNew,
@@ -51,15 +53,22 @@ export function AppHeader({
         <span className="font-heading text-base font-semibold">
           Configuration
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="max-w-[180px] truncate text-xs text-muted-foreground">
           {fileName ? fileName.split(/[\\/]/).pop() : "Untitled"}
         </span>
         {isDirty && (
-          <span className="size-1.5 rounded-full bg-amber-400" title="Unsaved changes" />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="size-1.5 rounded-full bg-amber-400" />
+              }
+            />
+            <TooltipContent>Unsaved changes</TooltipContent>
+          </Tooltip>
         )}
-        <Badge variant={running ? "default" : "secondary"} className="gap-1.5">
+        <Badge variant={running ? "default" : "secondary"} className="gap-1.5 min-w-[130px]">
           <span
-            className={`size-2 rounded-full ${running ? "bg-green-500" : "bg-muted-foreground"}`}
+            className={`size-2 rounded-full transition-colors duration-300 ${running ? "bg-green-500" : "bg-muted-foreground"}`}
           />
           {running ? `Running · ${formatElapsed(elapsed)}` : "Stopped"}
         </Badge>
@@ -71,6 +80,7 @@ export function AppHeader({
               <Button
                 size="icon"
                 variant="ghost"
+                disabled={isProcessing}
                 aria-label="New file"
                 onClick={onNew}
               >
@@ -86,6 +96,7 @@ export function AppHeader({
               <Button
                 size="icon"
                 variant="ghost"
+                disabled={isProcessing}
                 aria-label="Open file"
                 onClick={onOpen}
               >
@@ -101,6 +112,7 @@ export function AppHeader({
               <Button
                 size="icon"
                 variant="ghost"
+                disabled={isProcessing}
                 aria-label="Save"
                 onClick={onSave}
               >
@@ -116,6 +128,7 @@ export function AppHeader({
               <Button
                 size="icon"
                 variant="ghost"
+                disabled={isProcessing}
                 aria-label="Save as"
                 onClick={onSaveAs}
               >
@@ -126,17 +139,24 @@ export function AppHeader({
           <TooltipContent>Save As…</TooltipContent>
         </Tooltip>
         <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Reset settings"
-              >
-                <RotateCcw />
-              </Button>
-            }
-          />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Reset settings"
+                    >
+                      <RotateCcw />
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipContent>Reset all settings…</TooltipContent>
+          </Tooltip>
           <AlertDialogContent size="sm">
             <AlertDialogHeader>
               <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
@@ -169,7 +189,9 @@ export function AppHeader({
               </Button>
             }
           />
-          <TooltipContent>Toggle theme</TooltipContent>
+          <TooltipContent>
+            {resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          </TooltipContent>
         </Tooltip>
       </div>
     </header>
