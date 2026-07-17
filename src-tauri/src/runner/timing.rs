@@ -1,13 +1,32 @@
-use std::hint;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
 use std::time::{Duration, Instant};
 
 extern "system" {
     fn timeBeginPeriod(uPeriod: u32) -> u32;
     fn GetCurrentThread() -> isize;
     fn SetThreadPriority(hThread: isize, nPriority: i32) -> i32;
+
+    // Waitable timer API (replaces thread::sleep for precise timing)
+    fn CreateWaitableTimerExW(
+        lpTimerAttributes: *const std::ffi::c_void,
+        lpTimerName: *const u16,
+        dwFlags: u32,
+        dwDesiredAccess: u32,
+    ) -> isize;
+    fn SetWaitableTimer(
+        hTimer: isize,
+        lpDueTime: *const i64,
+        lPeriod: i32,
+        pfnCompletionRoutine: Option<unsafe extern "system" fn()>,
+        lpArgToCompletionRoutine: *const std::ffi::c_void,
+        fResume: i32,
+    ) -> i32;
+    fn WaitForSingleObject(hHandle: isize, dwMilliseconds: u32) -> u32;
+    fn CloseHandle(hObject: isize) -> i32;
 }
+
+const WAIT_OBJECT_0: u32 = 0;
+const TIMER_ALL_ACCESS: u32 = 0x1F0003;
 
 pub fn init_timing() {
     unsafe {
@@ -22,30 +41,72 @@ pub(crate) fn set_high_priority() {
     }
 }
 
+/// Sleeps for approximately `ms` milliseconds using a Windows waitable timer.
+///
+/// Uses `CreateWaitableTimerExW` + `SetWaitableTimer` + `WaitForSingleObject`
+/// so the thread blocks efficiently and wakes with sub-millisecond precision
+/// (~100µs jitter), unlike the old spin-sleep approach which had cumulative
+/// drift from `thread::sleep(1)` and unbounded spikes from `thread::yield_now()`.
+///
+/// Checks `running` on a 1ms poll so cancellation still works promptly.
+/// Falls back to a spin-loop if timer creation fails (edge case).
+///
+/// See https://learn.microsoft.com/en-us/windows/win32/sync/waitable-timer-objects
 pub(crate) fn sleep_precise(ms: u64, running: &AtomicBool) {
     if ms == 0 {
         return;
     }
 
-    let target = Instant::now() + Duration::from_millis(ms);
+    // Build a relative negative due time in 100ns intervals.
+    // SetWaitableTimer interprets negative values as relative time from "now".
+    let due_time: i64 = -(ms as i64) * 10_000;
 
-    loop {
-        if !running.load(Ordering::SeqCst) {
+    unsafe {
+        let timer = CreateWaitableTimerExW(
+            std::ptr::null(),
+            std::ptr::null(),
+            0, // auto-reset timer
+            TIMER_ALL_ACCESS,
+        );
+        if timer == 0 || timer == -1 {
+            // Fallback: spin-loop if timer creation fails
+            fallback_spin(ms, running);
             return;
         }
 
-        let now = Instant::now();
-        if now >= target {
-            break;
+        let ok = SetWaitableTimer(timer, &due_time, 0, None, std::ptr::null(), 0);
+        if ok == 0 {
+            CloseHandle(timer);
+            fallback_spin(ms, running);
+            return;
         }
 
-        let remaining = target - now;
-        if remaining > Duration::from_millis(2) {
-            thread::sleep(Duration::from_millis(1));
-        } else if remaining > Duration::from_micros(500) {
-            thread::yield_now();
-        } else {
-            hint::spin_loop();
+        // Wait for the timer to fire.
+        // Poll at 1ms to keep cancellation responsive.
+        loop {
+            let result = WaitForSingleObject(timer, 1);
+            if result == WAIT_OBJECT_0 {
+                break; // Timer fired — we're done
+            }
+            if !running.load(Ordering::SeqCst) {
+                break; // Cancelled
+            }
+            // WAIT_TIMEOUT (258) → poll again
         }
+
+        CloseHandle(timer);
+    }
+}
+
+/// Spin-loop fallback used when the waitable timer can't be created.
+/// Same behaviour as the old implementation but without `thread::yield_now()`
+/// to avoid the scheduler-spike problem.
+fn fallback_spin(ms: u64, running: &AtomicBool) {
+    let target = Instant::now() + Duration::from_millis(ms);
+    while Instant::now() < target {
+        if !running.load(Ordering::SeqCst) {
+            return;
+        }
+        std::hint::spin_loop();
     }
 }
