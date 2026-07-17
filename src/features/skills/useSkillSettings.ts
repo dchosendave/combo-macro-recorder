@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
+import { useUndo } from "@/shared/hooks/useUndo"
 import { MAX_REPEAT, MIN_REPEAT } from "@/shared/lib/defaults"
 import type {
   RepeatMode,
@@ -10,7 +11,14 @@ import type {
 export function useSkillSettings(initial: SkillConfig) {
   const [skillsEnabled, setSkillsEnabled] = useState(initial.enabled)
   const [holdRightClick, setHoldRightClick] = useState(initial.holdRightClick)
-  const [skillSteps, setSkillSteps] = useState<SkillStep[]>(initial.steps)
+  const {
+    value: skillSteps,
+    setValue: setSkillSteps,
+    undo: undoSteps,
+    redo: redoSteps,
+    canUndo,
+    canRedo,
+  } = useUndo<SkillStep[]>(initial.steps)
   const [labelStyle, setLabelStyle] = useState<StepLabelStyle>(initial.labelStyle)
   const [skillsRepeatMode, setSkillsRepeatMode] = useState<RepeatMode>(initial.repeatMode)
   const [skillsRepeatCount, setSkillsRepeatCount] = useState(initial.repeatCount)
@@ -125,5 +133,9 @@ export function useSkillSettings(initial: SkillConfig) {
     apply,
     persisted,
     skillsConfig,
+    undoSteps,
+    redoSteps,
+    canUndo,
+    canRedo,
   }
 }

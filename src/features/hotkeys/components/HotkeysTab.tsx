@@ -1,10 +1,9 @@
 import { useState } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { open } from "@tauri-apps/plugin-dialog"
-import { FolderSearch, ArrowUp, ArrowDown, Plus, Trash2 } from "lucide-react"
+import { ArrowUp, ArrowDown, FileJson, Pencil, Plus, Trash2 } from "lucide-react"
 import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
-import { Input } from "@/shared/components/ui/input"
 import { Button } from "@/shared/components/ui/button"
 import { Kbd } from "@/shared/components/ui/kbd"
 import { Card, CardContent } from "@/shared/components/ui/card"
@@ -29,7 +28,6 @@ type HotkeysTabProps = {
   compactCorner: CompactCorner
   onAddHotkey: () => void
   onDeleteHotkey: (id: string) => void
-  onRenameHotkey: (id: string, name: string) => void
   onUpdateHotkey: (id: string, hotkey: string) => void
   onUpdatePath: (id: string, path: string) => void
   onMoveHotkeyUp: (id: string) => void
@@ -42,7 +40,6 @@ export function HotkeysTab({
   compactCorner,
   onAddHotkey,
   onDeleteHotkey,
-  onRenameHotkey,
   onUpdateHotkey,
   onUpdatePath,
   onMoveHotkeyUp,
@@ -88,148 +85,164 @@ export function HotkeysTab({
     })
     if (path) {
       onUpdatePath(bindingId, path as string)
-      const binding = hotkeys.find((h) => h.id === bindingId)
-      if (binding) {
-        const isDefaultName =
-          binding.name === "Untitled" || /^Hotkey \d+$/.test(binding.name)
-        if (isDefaultName) {
-          const basename = (path as string).split(/[\\/]/).pop() ?? ""
-          const derived = basename.replace(/\.json$/i, "")
-          if (derived) {
-            onRenameHotkey(bindingId, derived)
-          }
-        }
-      }
     }
   }
 
   return (
     <Card size="sm" className="h-full" onKeyDown={handleKeyCapture} tabIndex={0}>
       <CardContent className="flex flex-1 flex-col gap-3 min-h-0 overflow-y-auto">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {hotkeys.map((binding) => (
             <div
               key={binding.id}
               onClick={() => setSelectedId(binding.id)}
-              className={`flex flex-col gap-2 rounded-xl border px-3 py-2 transition-all cursor-pointer ${
+              className={`flex flex-col gap-1.5 rounded-xl border px-2.5 py-1.5 transition-all cursor-pointer ${
                 selectedId === binding.id
                   ? "border-primary bg-primary/10 ring-1 ring-primary"
                   : "hover:bg-muted/50"
               }`}
             >
+              {/* Row 1: Hotkey + Actions */}
               <div className="flex items-center gap-2">
-                <Input
-                  value={binding.name}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onRenameHotkey(binding.id, e.target.value)}
-                  className="h-7 flex-1 text-sm font-medium"
-                />
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-6 shrink-0"
-                        disabled={hotkeys.indexOf(binding) === 0}
-                        aria-label="Move hotkey up"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onMoveHotkeyUp(binding.id)
-                        }}
-                      >
-                        <ArrowUp className="size-3" />
-                      </Button>
-                    }
-                  />
-                  <TooltipContent>Move up</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-6 shrink-0"
-                        disabled={hotkeys.indexOf(binding) === hotkeys.length - 1}
-                        aria-label="Move hotkey down"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onMoveHotkeyDown(binding.id)
-                        }}
-                      >
-                        <ArrowDown className="size-3" />
-                      </Button>
-                    }
-                  />
-                  <TooltipContent>Move down</TooltipContent>
-                </Tooltip>
-                {hotkeys.length > 1 && (
+
+                {/* Hotkey capture — click the badge to start */}
+                {capturingId === binding.id ? (
+                  <span className="text-xs font-medium text-primary animate-pulse shrink-0">
+                    Press a key...
+                  </span>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCapturingId(binding.id)
+                          }}
+                          className="shrink-0 flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted cursor-pointer"
+                        >
+                          <Kbd>{codeToLabel(binding.hotkey)}</Kbd>
+                          <Pencil className="size-2.5 text-muted-foreground/50" />
+                        </button>
+                      }
+                    />
+                    <TooltipContent>Click to change hotkey</TooltipContent>
+                  </Tooltip>
+                )}
+                {capturingId === binding.id && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCapturingId(null)
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground shrink-0"
+                  >
+                    Cancel
+                  </button>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-0.5 shrink-0">
                   <Tooltip>
                     <TooltipTrigger
                       render={
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="size-6 shrink-0"
-                          aria-label="Delete hotkey"
+                          className="size-6"
+                          disabled={hotkeys.indexOf(binding) === 0}
+                          aria-label="Move hotkey up"
                           onClick={(e) => {
                             e.stopPropagation()
-                            onDeleteHotkey(binding.id)
-                            if (selectedId === binding.id) setSelectedId(null)
+                            onMoveHotkeyUp(binding.id)
                           }}
                         >
-                          <Trash2 className="size-3" />
+                          <ArrowUp className="size-3" />
                         </Button>
                       }
                     />
-                    <TooltipContent>Delete hotkey</TooltipContent>
+                    <TooltipContent>Move up</TooltipContent>
                   </Tooltip>
-                )}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-6"
+                          disabled={hotkeys.indexOf(binding) === hotkeys.length - 1}
+                          aria-label="Move hotkey down"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onMoveHotkeyDown(binding.id)
+                          }}
+                        >
+                          <ArrowDown className="size-3" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Move down</TooltipContent>
+                  </Tooltip>
+                  {hotkeys.length > 1 && (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-6"
+                            aria-label="Delete hotkey"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onDeleteHotkey(binding.id)
+                              if (selectedId === binding.id) setSelectedId(null)
+                            }}
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        }
+                      />
+                      <TooltipContent>Delete hotkey</TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Hotkey:</span>
-                {capturingId === binding.id ? (
-                  <span className="text-xs font-medium text-primary">Press a key...</span>
-                ) : (
-                  <Kbd>{codeToLabel(binding.hotkey)}</Kbd>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-6 text-xs"
+              {/* Row 2: File path + Browse */}
+              <div className="flex items-center gap-2 pl-0.5">
+                <FileJson className="size-3.5 shrink-0 text-muted-foreground" />
+                <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    setCapturingId(capturingId === binding.id ? null : binding.id)
+                    handleBrowse(binding.id)
                   }}
+                  className="flex-1 text-left min-w-0"
                 >
-                  {capturingId === binding.id ? "Cancel" : "Change"}
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">File:</span>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <span className="text-xs text-muted-foreground truncate">
-                        {binding.comboPath
-                          ? binding.comboPath.split(/[\\/]/).pop()
-                          : "No file selected"}
-                      </span>
-                    }
-                  />
-                  <TooltipContent className="max-w-[400px] break-all">
-                    {binding.comboPath || "No file selected"}
-                  </TooltipContent>
-                </Tooltip>
+                  {binding.comboPath ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="text-xs text-muted-foreground truncate block">
+                            {binding.comboPath}
+                          </span>
+                        }
+                      />
+                      <TooltipContent className="max-w-[400px] break-all">
+                        {binding.comboPath}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span className="text-xs text-muted-foreground/60 italic">
+                      No file selected
+                    </span>
+                  )}
+                </button>
                 <Tooltip>
                   <TooltipTrigger
                     render={
                       <Button
                         size="icon"
-                        variant="ghost"
+                        variant="outline"
                         className="size-6 shrink-0"
                         aria-label="Browse for combo file"
                         onClick={(e) => {
@@ -237,7 +250,7 @@ export function HotkeysTab({
                           handleBrowse(binding.id)
                         }}
                       >
-                        <FolderSearch className="size-3" />
+                        <Plus className="size-3.5" />
                       </Button>
                     }
                   />

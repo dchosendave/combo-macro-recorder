@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowDown, ArrowUp, ClipboardPaste, Clock, Copy, GripVertical, Lock, LockOpen, Trash2, Wand2 } from "lucide-react"
+import { ArrowDown, ArrowUp, ClipboardPaste, Clock, Copy, GripVertical, Lock, LockOpen, Trash2, Undo2, Redo2, Wand2 } from "lucide-react"
 import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
@@ -49,6 +49,10 @@ type SkillsTabProps = {
   repeatCount: string
   setRepeatCount: (value: string) => void
   repeatError: boolean
+  onUndo: () => void
+  onRedo: () => void
+  canUndo: boolean
+  canRedo: boolean
 }
 
 export function SkillsTab({
@@ -73,6 +77,10 @@ export function SkillsTab({
   repeatCount,
   setRepeatCount,
   repeatError,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: SkillsTabProps) {
   const [jitbitText, setJitbitText] = useState("")
   const [jitbitOpen, setJitbitOpen] = useState(false)
@@ -114,23 +122,33 @@ export function SkillsTab({
     setDragOverId(null)
   }
 
-    const handleStepListKeyDown = (e: React.KeyboardEvent) => {
-      if (locked || !selectedId) return
-      if (e.key === "Delete") {
-        e.preventDefault()
-        onRemoveStep(selectedId)
-        setSelectedId(null)
-      } else if (e.ctrlKey && e.key === "d") {
-        e.preventDefault()
-        onDuplicateStep(selectedId)
-      } else if (e.ctrlKey && e.key === "ArrowUp") {
-        e.preventDefault()
-        onMoveStepUp(selectedId)
-      } else if (e.ctrlKey && e.key === "ArrowDown") {
-        e.preventDefault()
-        onMoveStepDown(selectedId)
-      }
+  const handleStepListKeyDown = (e: React.KeyboardEvent) => {
+    if (locked || !selectedId) return
+    if (e.key === "Delete") {
+      e.preventDefault()
+      onRemoveStep(selectedId)
+      setSelectedId(null)
+    } else if (e.ctrlKey && e.key === "d") {
+      e.preventDefault()
+      onDuplicateStep(selectedId)
+    } else if (e.ctrlKey && e.key === "ArrowUp") {
+      e.preventDefault()
+      onMoveStepUp(selectedId)
+    } else if (e.ctrlKey && e.key === "ArrowDown") {
+      e.preventDefault()
+      onMoveStepDown(selectedId)
     }
+  }
+
+  const handleGlobalKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      e.preventDefault()
+      onUndo()
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+      e.preventDefault()
+      onRedo()
+    }
+  }
 
   const reorderStep = (fromId: string, toId: string, position: "above" | "below") => {
     if (fromId === toId) return
@@ -193,7 +211,7 @@ export function SkillsTab({
   }
 
   return (
-    <Card size="sm" className="h-full">
+    <Card size="sm" className="h-full" onKeyDown={handleGlobalKeyDown} tabIndex={0}>
       <CardContent className="flex flex-1 flex-col gap-3 min-h-0">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="enable-skills" className="font-normal">
@@ -219,6 +237,7 @@ export function SkillsTab({
               />
             </div>
 
+            {/* Row 1: Labels, actions, and lock */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Labels:</span>
               <Select value={labelStyle} onValueChange={(v) => setLabelStyle(v as StepLabelStyle)}>
@@ -230,38 +249,6 @@ export function SkillsTab({
                   <SelectItem value="icon">↓ / ↑ / ⏱</SelectItem>
                 </SelectContent>
               </Select>
-
-              {!locked && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddKeydown}
-                    className="gap-1 animate-in fade-in-0 duration-200"
-                  >
-                    <ArrowDown className="size-3" />
-                    KeyDown
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddKeyup}
-                    className="gap-1 animate-in fade-in-0 duration-200"
-                  >
-                    <ArrowUp className="size-3" />
-                    KeyUp
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddDelay}
-                    className="gap-1 animate-in fade-in-0 duration-200"
-                  >
-                    <Clock className="size-3" />
-                    Delay
-                  </Button>
-                </>
-              )}
 
               <div className="flex-1" />
 
@@ -357,6 +344,45 @@ export function SkillsTab({
                 </>
               )}
 
+              {!locked && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-8 animate-in fade-in-0 duration-200"
+                          disabled={!canUndo}
+                          aria-label="Undo (Ctrl+Z)"
+                          onClick={onUndo}
+                        >
+                          <Undo2 className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-8 animate-in fade-in-0 duration-200"
+                          disabled={!canRedo}
+                          aria-label="Redo (Ctrl+Shift+Z)"
+                          onClick={onRedo}
+                        >
+                          <Redo2 className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Redo (Ctrl+Shift+Z)</TooltipContent>
+                  </Tooltip>
+                </>
+              )}
+
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -374,6 +400,39 @@ export function SkillsTab({
                 <TooltipContent>{locked ? "Unlock editing" : "Lock editing"}</TooltipContent>
               </Tooltip>
             </div>
+
+            {/* Row 2: Add-step buttons (only when unlocked) */}
+            {!locked && (
+              <div className="flex items-center gap-1.5 animate-in fade-in-0 duration-200">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddKeydown}
+                  className="gap-1"
+                >
+                  <ArrowDown className="size-3" />
+                  KeyDown
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddKeyup}
+                  className="gap-1"
+                >
+                  <ArrowUp className="size-3" />
+                  KeyUp
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddDelay}
+                  className="gap-1"
+                >
+                  <Clock className="size-3" />
+                  Delay
+                </Button>
+              </div>
+            )}
 
             <div
               ref={scrollRef}

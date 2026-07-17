@@ -68,6 +68,9 @@ export function useSettings() {
     skillsRepeatMode: skills.skillsRepeatMode, setSkillsRepeatMode: skills.setSkillsRepeatMode,
     skillsRepeatCount: skills.skillsRepeatCount, setSkillsRepeatCount: skills.setSkillsRepeatCount,
     skillsRepeatError: skills.skillsRepeatError, skillsCanRun: skills.skillsCanRun,
+    // Undo/Redo
+    undoSteps: skills.undoSteps, redoSteps: skills.redoSteps,
+    canUndoSteps: skills.canUndo, canRedoSteps: skills.canRedo,
     // Hotkeys
     hotkeys: hotkeysFeature.hotkeys,
     addHotkey: hotkeysFeature.addHotkey, deleteHotkey: hotkeysFeature.deleteHotkey, renameHotkey: hotkeysFeature.renameHotkey,

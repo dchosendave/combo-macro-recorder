@@ -211,6 +211,10 @@ function App() {
                   repeatCount={settings.skillsRepeatCount}
                   setRepeatCount={settings.setSkillsRepeatCount}
                   repeatError={settings.skillsRepeatError}
+                  onUndo={settings.undoSteps}
+                  onRedo={settings.redoSteps}
+                  canUndo={settings.canUndoSteps}
+                  canRedo={settings.canRedoSteps}
                 />
               </TabsContent>
             </Tabs>
@@ -222,7 +226,6 @@ function App() {
               compactCorner={compactCorner}
               onAddHotkey={settings.addHotkey}
               onDeleteHotkey={settings.deleteHotkey}
-              onRenameHotkey={settings.renameHotkey}
               onUpdateHotkey={settings.updateHotkeyBinding}
               onUpdatePath={settings.updateHotkeyPath}
               onMoveHotkeyUp={settings.moveHotkeyUp}
