@@ -226,6 +226,7 @@ function App() {
                   onRedo={settings.redoSteps}
                   canUndo={settings.canUndoSteps}
                   canRedo={settings.canRedoSteps}
+                  onRecordedSteps={settings.onRecordedSteps}
                 />
               </TabsContent>
             </Tabs>

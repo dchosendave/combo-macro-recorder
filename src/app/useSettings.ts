@@ -71,6 +71,8 @@ export function useSettings() {
     // Undo/Redo
     undoSteps: skills.undoSteps, redoSteps: skills.redoSteps,
     canUndoSteps: skills.canUndo, canRedoSteps: skills.canRedo,
+    // Recording
+    onRecordedSteps: skills.setSkillSteps,
     // Hotkeys
     hotkeys: hotkeysFeature.hotkeys,
     addHotkey: hotkeysFeature.addHotkey, deleteHotkey: hotkeysFeature.deleteHotkey, renameHotkey: hotkeysFeature.renameHotkey,
