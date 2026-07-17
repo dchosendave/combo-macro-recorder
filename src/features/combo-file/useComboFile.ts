@@ -7,6 +7,7 @@ import { defaultPotionConfig, defaultSkillConfig } from "@/shared/lib/defaults"
 import type { CurrentCombo } from "@/shared/lib/types"
 
 const EMPTY_BASELINE = exportComboToString({ potions: defaultPotionConfig(), skills: defaultSkillConfig() })
+const LAST_PATH_KEY = "combo-macro-last-path"
 
 type UseComboFileArgs = {
   getCombo: () => CurrentCombo
@@ -35,6 +36,7 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
     applyCombo(combo)
     setCurrentFilePath(null)
     setBaseline(exportComboToString(combo))
+    localStorage.removeItem(LAST_PATH_KEY)
     setIsProcessing(false)
   }, [applyCombo])
 
@@ -55,7 +57,8 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
       applyCombo(combo)
       setCurrentFilePath(path as string)
       setBaseline(exportComboToString(combo))
-      const openedName = (path as string).split(/[\\/]/).pop() ?? path
+      localStorage.setItem(LAST_PATH_KEY, path as string)
+      const openedName = (path as string).split(/[\\\\/]/).pop() ?? path
       toast.success(`Opened ${openedName}`)
       setIsProcessing(false)
       return true
@@ -72,6 +75,7 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
       await invoke("save_file", { path, content: json })
       setCurrentFilePath(path)
       setBaseline(json)
+      localStorage.setItem(LAST_PATH_KEY, path)
       onSave?.(path)
     },
     [],
@@ -152,6 +156,24 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
     setPendingAction(null)
   }, [])
 
+  const tryAutoLoad = useCallback(async (): Promise<boolean> => {
+    const autoLoad = localStorage.getItem("combo-macro-auto-load") !== "false"
+    const lastPath = localStorage.getItem(LAST_PATH_KEY)
+    if (!autoLoad || !lastPath) return false
+
+    try {
+      const content = await invoke<string>("read_file", { path: lastPath })
+      const combo = importComboFromString(content)
+      applyCombo(combo)
+      setCurrentFilePath(lastPath)
+      setBaseline(exportComboToString(combo))
+      return true
+    } catch {
+      localStorage.removeItem(LAST_PATH_KEY)
+      return false
+    }
+  }, [applyCombo])
+
   return {
     currentFilePath, setCurrentFilePath,
     openFile, saveFile, saveFileAs,
@@ -160,5 +182,6 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
     pendingAction,
     requestOpen, requestNew,
     confirmDiscard, cancelDiscard,
+    tryAutoLoad,
   }
 }

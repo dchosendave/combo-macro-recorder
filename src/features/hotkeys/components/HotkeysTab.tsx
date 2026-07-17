@@ -51,11 +51,19 @@ export function HotkeysTab({
   const [alwaysOnTop, setAlwaysOnTop] = useState(() => {
     return localStorage.getItem("combo-macro-always-on-top") === "true"
   })
+  const [autoLoad, setAutoLoad] = useState(() => {
+    return localStorage.getItem("combo-macro-auto-load") !== "false"
+  })
 
   const toggleAlwaysOnTop = async (v: boolean) => {
     setAlwaysOnTop(v)
     localStorage.setItem("combo-macro-always-on-top", String(v))
     await getCurrentWindow().setAlwaysOnTop(v)
+  }
+
+  const toggleAutoLoad = (v: boolean) => {
+    setAutoLoad(v)
+    localStorage.setItem("combo-macro-auto-load", String(v))
   }
 
   const handleKeyCapture = (e: React.KeyboardEvent) => {
@@ -283,6 +291,17 @@ export function HotkeysTab({
             id="always-on-top-hotkeys"
             checked={alwaysOnTop}
             onCheckedChange={toggleAlwaysOnTop}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="auto-load-last" className="font-normal">
+            Auto-load last combo on startup
+          </Label>
+          <Switch
+            id="auto-load-last"
+            checked={autoLoad}
+            onCheckedChange={toggleAutoLoad}
           />
         </div>
 

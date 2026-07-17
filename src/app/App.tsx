@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs"
@@ -82,10 +82,21 @@ function App() {
     requestNew,
     confirmDiscard,
     cancelDiscard,
+    tryAutoLoad,
   } = useComboFile({ getCombo, applyCombo: settings.applyCombo, onSave: clearCachedCombo })
 
   const [showStartup, setShowStartup] = useState(true)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [startupChecked, setStartupChecked] = useState(false)
+
+  useEffect(() => {
+    if (startupChecked) return
+    setStartupChecked(true)
+    ;(async () => {
+      const loaded = await tryAutoLoad()
+      if (loaded) setShowStartup(false)
+    })()
+  }, [tryAutoLoad, startupChecked])
 
   const runningProfileName = runningProfileIdRef.current
     ? settings.hotkeys.find((p) => p.id === runningProfileIdRef.current)?.name ?? null
