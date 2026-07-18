@@ -6,7 +6,7 @@ import type {
   PotionsRunConfig,
   RunnerInputs,
   SkillsRunConfig,
-} from "@/features/runner/lib/runnerInputs"
+} from "@/runner/runner-inputs"
 
 type UseMacroRunnerArgs = {
   potionsCanRun: boolean

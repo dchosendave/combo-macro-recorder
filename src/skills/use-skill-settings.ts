@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from "react"
-import { useUndo } from "@/shared/hooks/useUndo"
-import { MAX_REPEAT, MIN_REPEAT } from "@/shared/lib/defaults"
+import { useUndo } from "@/shared/use-undo"
+import { MAX_REPEAT, MIN_REPEAT } from "@/shared/defaults"
 import type {
   RepeatMode,
   SkillConfig,
   SkillStep,
   StepLabelStyle,
-} from "@/shared/lib/types"
+} from "@/shared/types"
 
 export function useSkillSettings(initial: SkillConfig) {
   const [skillsEnabled, setSkillsEnabled] = useState(initial.enabled)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowDown, ArrowUp, ClipboardPaste, Clock, Copy, GripVertical, Lock, LockOpen, Trash2, Undo2, Redo2, Wand2 } from "lucide-react"
+import { ArrowDown, ArrowUp, Circle, ClipboardPaste, Clock, Copy, GripVertical, Lock, LockOpen, Square, Trash2, Undo2, Redo2, Wand2 } from "lucide-react"
 import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
@@ -8,12 +8,22 @@ import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select"
 import { Textarea } from "@/shared/components/ui/textarea"
-import { RepeatModeControl } from "@/shared/components/RepeatModeControl"
+import { RepeatModeControl } from "@/shared/components/repeat-mode-control"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/components/ui/alert-dialog"
 import {
   Dialog,
   DialogContent,
@@ -24,8 +34,9 @@ import {
   DialogTrigger,
 } from "@/shared/components/ui/dialog"
 import { toast } from "sonner"
-import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/lib/types"
-import { parseCombo, parseJitbit } from "@/features/skills/lib/parsers"
+import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/types"
+import { parseCombo, parseJitbit } from "@/skills/parsers"
+import { useRecorder } from "@/recorder/use-recorder"
 
 type SkillsTabProps = {
   enabled: boolean
@@ -53,6 +64,7 @@ type SkillsTabProps = {
   onRedo: () => void
   canUndo: boolean
   canRedo: boolean
+  onRecordedSteps?: (steps: SkillStep[]) => void
 }
 
 export function SkillsTab({
@@ -81,6 +93,7 @@ export function SkillsTab({
   onRedo,
   canUndo,
   canRedo,
+  onRecordedSteps,
 }: SkillsTabProps) {
   const [jitbitText, setJitbitText] = useState("")
   const [jitbitOpen, setJitbitOpen] = useState(false)
@@ -89,6 +102,8 @@ export function SkillsTab({
   const [comboOpen, setComboOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [locked, setLocked] = useState(true)
+  const [selectAll, setSelectAll] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -97,12 +112,21 @@ export function SkillsTab({
   const scrollRef = useRef<HTMLDivElement>(null)
   const justAddedRef = useRef(false)
 
+  const { isRecording, startRecording, stopRecording } = useRecorder()
+
   useEffect(() => {
     if (scrollRef.current && justAddedRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
       justAddedRef.current = false
     }
   }, [steps.length])
+
+  // Reset select-all when steps change or locked
+  useEffect(() => {
+    if (selectAll && (locked || steps.length === 0)) {
+      setSelectAll(false)
+    }
+  }, [locked, steps.length, selectAll])
 
   const handleAddKeydown = () => {
     justAddedRef.current = true
@@ -123,19 +147,27 @@ export function SkillsTab({
   }
 
   const handleStepListKeyDown = (e: React.KeyboardEvent) => {
-    if (locked || !selectedId) return
+    if (locked) return
     if (e.key === "Delete") {
       e.preventDefault()
+      if (selectAll) {
+        setShowClearConfirm(true)
+        return
+      }
+      if (!selectedId) return
       onRemoveStep(selectedId)
       setSelectedId(null)
     } else if (e.ctrlKey && e.key === "d") {
       e.preventDefault()
+      if (!selectedId) return
       onDuplicateStep(selectedId)
     } else if (e.ctrlKey && e.key === "ArrowUp") {
       e.preventDefault()
+      if (!selectedId) return
       onMoveStepUp(selectedId)
     } else if (e.ctrlKey && e.key === "ArrowDown") {
       e.preventDefault()
+      if (!selectedId) return
       onMoveStepDown(selectedId)
     }
   }
@@ -147,6 +179,12 @@ export function SkillsTab({
     } else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
       e.preventDefault()
       onRedo()
+    } else if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+      e.preventDefault()
+      if (!locked) {
+        setSelectAll((prev) => !prev)
+        setSelectedId(null)
+      }
     }
   }
 
@@ -431,6 +469,36 @@ export function SkillsTab({
                   <Clock className="size-3" />
                   Delay
                 </Button>
+
+                <div className="flex-1" />
+
+                <Button
+                  variant={isRecording ? "destructive" : "outline"}
+                  size="sm"
+                  onClick={async () => {
+                    if (isRecording) {
+                      const steps = await stopRecording()
+                      if (steps && onRecordedSteps) {
+                        onRecordedSteps(steps)
+                      }
+                    } else {
+                      startRecording()
+                    }
+                  }}
+                  className="gap-1"
+                >
+                  {isRecording ? (
+                    <>
+                      <Square className="size-3" />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <Circle className="size-3 fill-current text-red-500" />
+                      Record
+                    </>
+                  )}
+                </Button>
               </div>
             )}
 
@@ -483,7 +551,7 @@ export function SkillsTab({
                               : "border-b-2 border-b-primary transition-all duration-150"
                             : ""
                         } ${
-                          selectedId === step.id
+                          selectedId === step.id || selectAll
                             ? "border-primary bg-primary/10 ring-1 ring-primary"
                             : "hover:bg-muted/50"
                         }`}
@@ -657,6 +725,33 @@ export function SkillsTab({
           </p>
         )}
       </CardContent>
+
+      <AlertDialog open={showClearConfirm}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete all steps?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all {steps.length} steps. Undo (Ctrl+Z) can restore them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowClearConfirm(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                onSetSteps([])
+                setShowClearConfirm(false)
+                setSelectAll(false)
+                setSelectedId(null)
+              }}
+            >
+              Delete all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

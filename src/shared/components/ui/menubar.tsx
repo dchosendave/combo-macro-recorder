@@ -2,7 +2,7 @@ import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { Menubar as MenubarPrimitive } from "@base-ui/react/menubar"
 
-import { cn } from "@/shared/lib/utils"
+import { cn } from "@/shared/utils"
 import {
   DropdownMenu,
   DropdownMenuContent,

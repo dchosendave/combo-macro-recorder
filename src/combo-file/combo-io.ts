@@ -1,5 +1,5 @@
-import { defaultPotionConfig, defaultSkillConfig } from "@/shared/lib/defaults"
-import type { CurrentCombo, SkillStep } from "@/shared/lib/types"
+import { defaultPotionConfig, defaultSkillConfig } from "@/shared/defaults"
+import type { CurrentCombo, SkillStep } from "@/shared/types"
 
 export function exportComboToString(current: CurrentCombo): string {
   return JSON.stringify({ version: 3, potions: current.potions, skills: current.skills }, null, 2)

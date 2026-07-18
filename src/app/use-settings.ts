@@ -1,11 +1,11 @@
 import { useCallback, useEffect } from "react"
 import { toast } from "sonner"
-import { clearHotkeys, loadHotkeys, saveHotkeys } from "@/shared/lib/persistence"
-import { defaultPotionConfig, defaultSkillConfig, makeDefaultSettings } from "@/shared/lib/defaults"
-import type { CurrentCombo, SettingsV3 } from "@/shared/lib/types"
-import { usePotionSettings } from "@/features/potions/usePotionSettings"
-import { useSkillSettings } from "@/features/skills/useSkillSettings"
-import { useHotkeySettings } from "@/features/hotkeys/useHotkeySettings"
+import { clearHotkeys, loadHotkeys, saveHotkeys } from "@/shared/persistence"
+import { defaultPotionConfig, defaultSkillConfig, makeDefaultSettings } from "@/shared/defaults"
+import type { CurrentCombo, SettingsV3 } from "@/shared/types"
+import { usePotionSettings } from "@/potions/use-potion-settings"
+import { useSkillSettings } from "@/skills/use-skill-settings"
+import { useHotkeySettings } from "@/hotkeys/use-hotkey-settings"
 
 export function useSettings() {
   const potions = usePotionSettings(defaultPotionConfig())
@@ -71,6 +71,8 @@ export function useSettings() {
     // Undo/Redo
     undoSteps: skills.undoSteps, redoSteps: skills.redoSteps,
     canUndoSteps: skills.canUndo, canRedoSteps: skills.canRedo,
+    // Recording
+    onRecordedSteps: skills.setSkillSteps,
     // Hotkeys
     hotkeys: hotkeysFeature.hotkeys,
     addHotkey: hotkeysFeature.addHotkey, deleteHotkey: hotkeysFeature.deleteHotkey, renameHotkey: hotkeysFeature.renameHotkey,

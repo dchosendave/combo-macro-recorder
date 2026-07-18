@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react"
 import { currentMonitor, getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window"
 import { LogicalSize, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi"
 import { toast } from "sonner"
-import type { CompactCorner } from "@/shared/lib/types"
+import type { CompactCorner } from "@/shared/types"
 
 const COMPACT = new LogicalSize(500, 68)
 const MIN_CONSTRAINTS = { minWidth: 660, minHeight: 720 }

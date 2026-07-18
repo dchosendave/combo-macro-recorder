@@ -1,5 +1,5 @@
-import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/lib/defaults"
-import type { CurrentCombo, PotionKey, RepeatMode } from "@/shared/lib/types"
+import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/defaults"
+import type { CurrentCombo, PotionKey, RepeatMode } from "@/shared/types"
 
 export type PotionsRunConfig = {
   keys: Record<PotionKey, boolean>

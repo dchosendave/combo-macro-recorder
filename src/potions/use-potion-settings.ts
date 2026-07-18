@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
-import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/lib/defaults"
-import type { PotionConfig, PotionKey, RepeatMode } from "@/shared/lib/types"
+import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/defaults"
+import type { PotionConfig, PotionKey, RepeatMode } from "@/shared/types"
 
 export function usePotionSettings(initial: PotionConfig) {
   const [potionsEnabled, setPotionsEnabled] = useState(initial.enabled)

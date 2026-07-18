@@ -1,4 +1,4 @@
-import type { SkillStep } from "@/shared/lib/types"
+import type { SkillStep } from "@/shared/types"
 
 export function parseJitbit(text: string): SkillStep[] {
   const steps: SkillStep[] = []

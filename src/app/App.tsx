@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs"
-import { AppHeader } from "@/app/AppHeader"
-import { TitleBar } from "@/app/TitleBar"
-import { KeysTab } from "@/features/potions/components/KeysTab"
-import { SkillsTab } from "@/features/skills/components/SkillsTab"
-import { HotkeysTab } from "@/features/hotkeys/components/HotkeysTab"
-import { CompactOverlay } from "@/features/runner/components/CompactOverlay"
-import { StartupDialog } from "@/features/combo-file/components/StartupDialog"
-import { ConfirmDiscardDialog } from "@/features/combo-file/components/ConfirmDiscardDialog"
+import { AppHeader } from "@/app/app-header"
+import { TitleBar } from "@/app/title-bar"
+import { KeysTab } from "@/potions/keys-tab"
+import { SkillsTab } from "@/skills/skills-tab"
+import { HotkeysTab } from "@/hotkeys/hotkeys-tab"
+import { CompactOverlay } from "@/runner/compact-overlay"
+import { StartupDialog } from "@/combo-file/startup-dialog"
+import { ConfirmDiscardDialog } from "@/combo-file/confirm-discard-dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,12 +20,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/shared/components/ui/alert-dialog"
-import { useSettings } from "@/app/useSettings"
-import { useMacroRunner } from "@/features/runner/useMacroRunner"
-import { useCompactMode } from "@/features/runner/useCompactMode"
-import { useComboFile } from "@/features/combo-file/useComboFile"
-import { useGlobalHotkeys } from "@/features/hotkeys/useGlobalHotkeys"
-import { codeToLabel } from "@/shared/lib/keycodes"
+import { useSettings } from "@/app/use-settings"
+import { useMacroRunner } from "@/runner/use-macro-runner"
+import { useCompactMode } from "@/runner/use-compact-mode"
+import { useComboFile } from "@/combo-file/use-combo-file"
+import { useGlobalHotkeys } from "@/hotkeys/use-global-hotkeys"
+import { codeToLabel } from "@/shared/keycodes"
 import "./App.css"
 
 function App() {
@@ -226,6 +226,7 @@ function App() {
                   onRedo={settings.redoSteps}
                   canUndo={settings.canUndoSteps}
                   canRedo={settings.canRedoSteps}
+                  onRecordedSteps={settings.onRecordedSteps}
                 />
               </TabsContent>
             </Tabs>

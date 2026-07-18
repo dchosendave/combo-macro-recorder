@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import type { HotkeyBinding } from "@/shared/lib/types"
+import type { HotkeyBinding } from "@/shared/types"
 
 export function useHotkeySettings(initial: HotkeyBinding[]) {
   const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>(initial)
