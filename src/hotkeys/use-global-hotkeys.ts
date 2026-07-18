@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event"
 import { toast } from "sonner"
 import { codeToShortcut } from "@/shared/keycodes"
 import { importComboFromString } from "@/combo-file/combo-io"
-import { toRunnerInputs, type RunnerInputs } from "@/runner/runnerInputs"
+import { toRunnerInputs, type RunnerInputs } from "@/runner/runner-inputs"
 import type { CurrentCombo, HotkeyBinding } from "@/shared/types"
 
 type UseGlobalHotkeysArgs = {

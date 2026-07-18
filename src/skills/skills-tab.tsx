@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select"
 import { Textarea } from "@/shared/components/ui/textarea"
-import { RepeatModeControl } from "@/shared/components/RepeatModeControl"
+import { RepeatModeControl } from "@/shared/components/repeat-mode-control"
 import {
   Tooltip,
   TooltipContent,
@@ -36,7 +36,7 @@ import {
 import { toast } from "sonner"
 import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/types"
 import { parseCombo, parseJitbit } from "@/skills/parsers"
-import { useRecorder } from "@/recorder/useRecorder"
+import { useRecorder } from "@/recorder/use-recorder"
 
 type SkillsTabProps = {
   enabled: boolean

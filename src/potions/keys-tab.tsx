@@ -4,7 +4,7 @@ import { Input } from "@/shared/components/ui/input"
 import { Kbd } from "@/shared/components/ui/kbd"
 import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
-import { RepeatModeControl } from "@/shared/components/RepeatModeControl"
+import { RepeatModeControl } from "@/shared/components/repeat-mode-control"
 import { MIN_DELAY } from "@/shared/defaults"
 import { type PotionKey, type RepeatMode } from "@/shared/types"
 

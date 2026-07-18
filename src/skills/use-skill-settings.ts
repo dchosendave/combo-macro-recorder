@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
-import { useUndo } from "@/shared/useUndo"
+import { useUndo } from "@/shared/use-undo"
 import { MAX_REPEAT, MIN_REPEAT } from "@/shared/defaults"
 import type {
   RepeatMode,
