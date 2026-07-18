@@ -34,9 +34,9 @@ import {
   DialogTrigger,
 } from "@/shared/components/ui/dialog"
 import { toast } from "sonner"
-import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/lib/types"
-import { parseCombo, parseJitbit } from "@/features/skills/lib/parsers"
-import { useRecorder } from "@/features/recorder/useRecorder"
+import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/types"
+import { parseCombo, parseJitbit } from "@/skills/parsers"
+import { useRecorder } from "@/recorder/useRecorder"
 
 type SkillsTabProps = {
   enabled: boolean

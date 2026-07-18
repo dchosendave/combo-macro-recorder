@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 
-import { cn } from "@/shared/lib/utils"
+import { cn } from "@/shared/utils"
 import {
   Dialog,
   DialogContent,

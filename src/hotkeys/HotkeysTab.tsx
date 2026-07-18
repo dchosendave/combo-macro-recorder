@@ -1,7 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { open } from "@tauri-apps/plugin-dialog"
-import { ArrowUp, ArrowDown, FileJson, Pencil, Plus, Trash2 } from "lucide-react"
+import { invoke } from "@tauri-apps/api/core"
+import { ArrowUp, ArrowDown, FileJson, FolderOpen, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react"
 import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
 import { Button } from "@/shared/components/ui/button"
@@ -20,8 +21,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip"
-import { codeToLabel } from "@/shared/lib/keycodes"
-import type { CompactCorner, HotkeyBinding } from "@/shared/lib/types"
+import { codeToLabel } from "@/shared/keycodes"
+import type { CompactCorner, HotkeyBinding } from "@/shared/types"
 
 type HotkeysTabProps = {
   hotkeys: HotkeyBinding[]
@@ -65,6 +66,37 @@ export function HotkeysTab({
     setAutoLoad(v)
     localStorage.setItem("combo-macro-auto-load", String(v))
   }
+
+  const COMBO_DIR_KEY = "combo-macro-combo-dir"
+
+  const [comboDir, setComboDir] = useState(() => {
+    return localStorage.getItem(COMBO_DIR_KEY) ?? ""
+  })
+  const [comboFiles, setComboFiles] = useState<{ name: string; path: string }[]>([])
+
+  const handleSetComboDir = async () => {
+    const selected = await open({ directory: true, multiple: false })
+    if (selected) {
+      setComboDir(selected as string)
+      localStorage.setItem(COMBO_DIR_KEY, selected as string)
+      await refreshComboFiles(selected as string)
+    }
+  }
+
+  const refreshComboFiles = async (dir: string) => {
+    if (!dir) { setComboFiles([]); return }
+    try {
+      const files = await invoke<{ name: string; path: string }[]>("list_combo_files", { path: dir })
+      setComboFiles(files)
+    } catch {
+      setComboFiles([])
+    }
+  }
+
+  useEffect(() => {
+    const saved = localStorage.getItem(COMBO_DIR_KEY)
+    if (saved) refreshComboFiles(saved)
+  }, [])
 
   const handleKeyCapture = (e: React.KeyboardEvent) => {
     if (!capturingId) return
@@ -216,35 +248,53 @@ export function HotkeysTab({
                 </div>
               </div>
 
-              {/* Row 2: File path + Browse */}
+              {/* Row 2: File path + Browse / Dropdown */}
               <div className="flex items-center gap-2 pl-0.5">
                 <FileJson className="size-3.5 shrink-0 text-muted-foreground" />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleBrowse(binding.id)
-                  }}
-                  className="flex-1 text-left min-w-0"
-                >
-                  {binding.comboPath ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span className="text-xs text-muted-foreground truncate block">
-                            {binding.comboPath}
-                          </span>
-                        }
-                      />
-                      <TooltipContent className="max-w-[400px] break-all">
-                        {binding.comboPath}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <span className="text-xs text-muted-foreground/60 italic">
-                      No file selected
-                    </span>
-                  )}
-                </button>
+                {comboFiles.length > 0 ? (
+                  <Select
+                    value={binding.comboPath ?? ""}
+                    onValueChange={(path) => path && onUpdatePath(binding.id, path)}
+                  >
+                    <SelectTrigger className="h-7 flex-1 text-xs min-w-0" onClick={(e) => e.stopPropagation()}>
+                      <SelectValue placeholder="Select a combo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {comboFiles.map((file) => (
+                        <SelectItem key={file.path} value={file.path}>
+                          {file.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleBrowse(binding.id)
+                    }}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    {binding.comboPath ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className="text-xs text-muted-foreground truncate block">
+                              {binding.comboPath}
+                            </span>
+                          }
+                        />
+                        <TooltipContent className="max-w-[400px] break-all">
+                          {binding.comboPath}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/60 italic">
+                        No file selected
+                      </span>
+                    )}
+                  </button>
+                )}
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -303,6 +353,51 @@ export function HotkeysTab({
             checked={autoLoad}
             onCheckedChange={toggleAutoLoad}
           />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <Label className="font-normal">
+            Combo files directory
+          </Label>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+              {comboDir || "Not set"}
+            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="size-6 shrink-0"
+                    aria-label="Select directory"
+                    onClick={handleSetComboDir}
+                  >
+                    <FolderOpen className="size-3.5" />
+                  </Button>
+                }
+              />
+              <TooltipContent>Select directory</TooltipContent>
+            </Tooltip>
+            {comboDir && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-6 shrink-0"
+                      aria-label="Refresh file list"
+                      onClick={() => refreshComboFiles(comboDir)}
+                    >
+                      <RefreshCw className="size-3.5" />
+                    </Button>
+                  }
+                />
+                <TooltipContent>Refresh</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-4">

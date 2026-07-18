@@ -4,12 +4,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs"
 import { AppHeader } from "@/app/AppHeader"
 import { TitleBar } from "@/app/TitleBar"
-import { KeysTab } from "@/features/potions/components/KeysTab"
-import { SkillsTab } from "@/features/skills/components/SkillsTab"
-import { HotkeysTab } from "@/features/hotkeys/components/HotkeysTab"
-import { CompactOverlay } from "@/features/runner/components/CompactOverlay"
-import { StartupDialog } from "@/features/combo-file/components/StartupDialog"
-import { ConfirmDiscardDialog } from "@/features/combo-file/components/ConfirmDiscardDialog"
+import { KeysTab } from "@/potions/KeysTab"
+import { SkillsTab } from "@/skills/SkillsTab"
+import { HotkeysTab } from "@/hotkeys/HotkeysTab"
+import { CompactOverlay } from "@/runner/CompactOverlay"
+import { StartupDialog } from "@/combo-file/StartupDialog"
+import { ConfirmDiscardDialog } from "@/combo-file/ConfirmDiscardDialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,11 +21,11 @@ import {
   AlertDialogTitle,
 } from "@/shared/components/ui/alert-dialog"
 import { useSettings } from "@/app/useSettings"
-import { useMacroRunner } from "@/features/runner/useMacroRunner"
-import { useCompactMode } from "@/features/runner/useCompactMode"
-import { useComboFile } from "@/features/combo-file/useComboFile"
-import { useGlobalHotkeys } from "@/features/hotkeys/useGlobalHotkeys"
-import { codeToLabel } from "@/shared/lib/keycodes"
+import { useMacroRunner } from "@/runner/useMacroRunner"
+import { useCompactMode } from "@/runner/useCompactMode"
+import { useComboFile } from "@/combo-file/useComboFile"
+import { useGlobalHotkeys } from "@/hotkeys/useGlobalHotkeys"
+import { codeToLabel } from "@/shared/keycodes"
 import "./App.css"
 
 function App() {

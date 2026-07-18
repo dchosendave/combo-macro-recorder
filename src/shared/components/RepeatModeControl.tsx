@@ -1,8 +1,8 @@
 import { Input } from "@/shared/components/ui/input"
 import { Label } from "@/shared/components/ui/label"
 import { ToggleGroup, ToggleGroupItem } from "@/shared/components/ui/toggle-group"
-import { MAX_REPEAT } from "@/shared/lib/defaults"
-import type { RepeatMode } from "@/shared/lib/types"
+import { MAX_REPEAT } from "@/shared/defaults"
+import type { RepeatMode } from "@/shared/types"
 
 type RepeatModeControlProps = {
   repeatMode: RepeatMode

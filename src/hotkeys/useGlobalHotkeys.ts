@@ -3,10 +3,10 @@ import { useEffect, useRef } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { toast } from "sonner"
-import { codeToShortcut } from "@/shared/lib/keycodes"
-import { importComboFromString } from "@/features/combo-file/lib/combo-io"
-import { toRunnerInputs, type RunnerInputs } from "@/features/runner/lib/runnerInputs"
-import type { CurrentCombo, HotkeyBinding } from "@/shared/lib/types"
+import { codeToShortcut } from "@/shared/keycodes"
+import { importComboFromString } from "@/combo-file/combo-io"
+import { toRunnerInputs, type RunnerInputs } from "@/runner/runnerInputs"
+import type { CurrentCombo, HotkeyBinding } from "@/shared/types"
 
 type UseGlobalHotkeysArgs = {
   hotkeys: HotkeyBinding[]

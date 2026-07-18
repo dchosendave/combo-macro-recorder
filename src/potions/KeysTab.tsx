@@ -5,8 +5,8 @@ import { Kbd } from "@/shared/components/ui/kbd"
 import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
 import { RepeatModeControl } from "@/shared/components/RepeatModeControl"
-import { MIN_DELAY } from "@/shared/lib/defaults"
-import { type PotionKey, type RepeatMode } from "@/shared/lib/types"
+import { MIN_DELAY } from "@/shared/defaults"
+import { type PotionKey, type RepeatMode } from "@/shared/types"
 
 const POTION_KEYS: PotionKey[] = ["q", "w", "e", "r"]
 

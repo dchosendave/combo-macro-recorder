@@ -1,11 +1,11 @@
 import { useCallback, useEffect } from "react"
 import { toast } from "sonner"
-import { clearHotkeys, loadHotkeys, saveHotkeys } from "@/shared/lib/persistence"
-import { defaultPotionConfig, defaultSkillConfig, makeDefaultSettings } from "@/shared/lib/defaults"
-import type { CurrentCombo, SettingsV3 } from "@/shared/lib/types"
-import { usePotionSettings } from "@/features/potions/usePotionSettings"
-import { useSkillSettings } from "@/features/skills/useSkillSettings"
-import { useHotkeySettings } from "@/features/hotkeys/useHotkeySettings"
+import { clearHotkeys, loadHotkeys, saveHotkeys } from "@/shared/persistence"
+import { defaultPotionConfig, defaultSkillConfig, makeDefaultSettings } from "@/shared/defaults"
+import type { CurrentCombo, SettingsV3 } from "@/shared/types"
+import { usePotionSettings } from "@/potions/usePotionSettings"
+import { useSkillSettings } from "@/skills/useSkillSettings"
+import { useHotkeySettings } from "@/hotkeys/useHotkeySettings"
 
 export function useSettings() {
   const potions = usePotionSettings(defaultPotionConfig())

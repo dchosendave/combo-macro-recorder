@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/shared/components/ui/alert-dialog"
-import { formatElapsed } from "@/shared/lib/format"
+import { formatElapsed } from "@/shared/format"
 
 type AppHeaderProps = {
   running: boolean

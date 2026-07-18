@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { open, save } from "@tauri-apps/plugin-dialog"
 import { toast } from "sonner"
-import { exportComboToString, importComboFromString } from "@/features/combo-file/lib/combo-io"
-import { defaultPotionConfig, defaultSkillConfig } from "@/shared/lib/defaults"
-import type { CurrentCombo } from "@/shared/lib/types"
+import { exportComboToString, importComboFromString } from "@/combo-file/combo-io"
+import { defaultPotionConfig, defaultSkillConfig } from "@/shared/defaults"
+import type { CurrentCombo } from "@/shared/types"
 
 const EMPTY_BASELINE = exportComboToString({ potions: defaultPotionConfig(), skills: defaultSkillConfig() })
 const LAST_PATH_KEY = "combo-macro-last-path"

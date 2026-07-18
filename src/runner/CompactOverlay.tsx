@@ -1,6 +1,6 @@
 import { Button } from "@/shared/components/ui/button"
 import { Kbd } from "@/shared/components/ui/kbd"
-import { formatElapsed } from "@/shared/lib/format"
+import { formatElapsed } from "@/shared/format"
 
 type CompactOverlayProps = {
   elapsed: number

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { toast } from "sonner"
-import type { SkillStep } from "@/shared/lib/types"
+import type { SkillStep } from "@/shared/types"
 
 type RecordedEvent = {
   timestampMs: number

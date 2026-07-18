@@ -1,7 +1,7 @@
 mod commands;
 mod runner;
 
-use commands::files::{read_file, save_file};
+use commands::files::{list_combo_files, read_file, save_file};
 use commands::hotkeys::{set_hotkeys, HotkeyState};
 use commands::recorder::{start_recording, stop_recording};
 use runner::{init_timing, start_combo, stop_all, AppState};
@@ -40,6 +40,7 @@ pub fn run() {
             set_hotkeys,
             start_recording,
             stop_recording,
+            list_combo_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
