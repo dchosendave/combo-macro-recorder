@@ -136,6 +136,18 @@ function App() {
     exitCompact()
   }, [settings, exitCompact, newCombo])
 
+  const [activeTab, setActiveTab] = useState("combo")
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Tab") {
+      e.preventDefault()
+      setActiveTab((prev) => {
+        if (e.shiftKey) return prev === "combo" ? "profiles" : "combo"
+        return prev === "combo" ? "profiles" : "combo"
+      })
+    }
+  }, [])
+
   if (compactMode) {
     return (
       <CompactOverlay
@@ -151,7 +163,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden" onKeyDown={handleKeyDown}>
       <TitleBar onRequestClose={handleRequestClose} />
       <main className="flex flex-1 min-h-0 flex-col gap-4 p-4">
         <AppHeader
@@ -167,7 +179,7 @@ function App() {
           onSaveAs={saveFileAs}
         />
 
-        <Tabs defaultValue="combo" className="flex-1 min-h-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0">
           <TabsList className="w-full">
             <TabsTrigger value="combo">Combo</TabsTrigger>
             <TabsTrigger value="profiles">Hotkeys</TabsTrigger>

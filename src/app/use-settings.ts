@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { clearHotkeys, loadHotkeys, saveHotkeys } from "@/shared/persistence"
 import { defaultPotionConfig, defaultSkillConfig, makeDefaultSettings } from "@/shared/defaults"
@@ -43,8 +43,17 @@ export function useSettings() {
     [potions.persisted, skills.persisted, hotkeysFeature.persisted],
   )
 
+  // Debounce hotkey persistence to avoid jank during rapid edits.
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    saveHotkeys(hotkeysFeature.persisted)
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    persistTimerRef.current = setTimeout(() => {
+      saveHotkeys(hotkeysFeature.persisted)
+      persistTimerRef.current = null
+    }, 300)
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    }
   }, [hotkeysFeature.persisted])
 
   return {

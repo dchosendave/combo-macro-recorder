@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { open, save } from "@tauri-apps/plugin-dialog"
 import { toast } from "sonner"
@@ -29,7 +29,10 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
   const getComboRef = useRef(getCombo)
   getComboRef.current = getCombo
 
-  const isDirty = exportComboToString(getCombo()) !== baseline
+  const isDirty = useMemo(
+    () => exportComboToString(getCombo()) !== baseline,
+    [getCombo, baseline],
+  )
 
   const doNew = useCallback(() => {
     const combo: CurrentCombo = { potions: defaultPotionConfig(), skills: defaultSkillConfig() }

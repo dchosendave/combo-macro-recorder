@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react"
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { toast } from "sonner"
@@ -48,11 +48,15 @@ export function useGlobalHotkeys({
 
   // Preload every attached combo file once (and whenever the set of paths
   // changes), populating the cache.
-  const comboPathsKey = hotkeys
-    .map((p) => p.comboPath)
-    .filter(Boolean)
-    .sort()
-    .join("|")
+  const comboPathsKey = useMemo(
+    () =>
+      hotkeys
+        .map((p) => p.comboPath)
+        .filter(Boolean)
+        .sort()
+        .join("|"),
+    [hotkeys],
+  )
 
   useEffect(() => {
     let cancelled = false

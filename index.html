@@ -5,6 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hamin Macro Recorder</title>
+    <!-- Prevent dark/light flash before React hydrates -->
+    <script>
+      (function() {
+        var theme = (function() {
+          try { return localStorage.getItem("theme") } catch(e) {}
+        })();
+        var isDark = theme === "dark"
+          || (theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (isDark) document.documentElement.classList.add("dark");
+      })();
+    </script>
   </head>
 
   <body>
