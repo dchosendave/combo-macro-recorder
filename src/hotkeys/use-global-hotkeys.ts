@@ -25,17 +25,35 @@ export function useGlobalHotkeys({
   applyCombo,
   runningProfileIdRef,
 }: UseGlobalHotkeysArgs) {
-  // Register the OS-level global shortcuts.
+  const hotkeysRef = useRef(hotkeys)
+  hotkeysRef.current = hotkeys
+
+  const toggleRunningRef = useRef(toggleRunning)
+  toggleRunningRef.current = toggleRunning
+
+  const startComboRef = useRef(startCombo)
+  startComboRef.current = startCombo
+
+  const stopAllRef = useRef(stopAll)
+  stopAllRef.current = stopAll
+
+  const applyComboRef = useRef(applyCombo)
+  applyComboRef.current = applyCombo
+
+  // Register the OS-level global shortcuts (debounced to avoid thrash).
   useEffect(() => {
-    const mapped = hotkeys
-      .filter((p) => p.hotkey)
-      .map((p) => ({
-        shortcut: codeToShortcut(p.hotkey),
-        hotkeyId: p.id,
-      }))
-    invoke("set_hotkeys", { hotkeys: mapped }).catch(
-      () => toast.warning("Failed to register global hotkeys"),
-    )
+    const timer = setTimeout(() => {
+      const mapped = hotkeysRef.current
+        .filter((p) => p.hotkey)
+        .map((p) => ({
+          shortcut: codeToShortcut(p.hotkey),
+          hotkeyId: p.id,
+        }))
+      invoke("set_hotkeys", { hotkeys: mapped }).catch(
+        () => toast.warning("Failed to register global hotkeys"),
+      )
+    }, 50)
+    return () => clearTimeout(timer)
   }, [hotkeys])
 
   // Parsed-combo cache so switching is instant and deterministic (no per-press
@@ -84,12 +102,12 @@ export function useGlobalHotkeys({
 
   useEffect(() => {
     const unlisten = listen<string>("macro-toggle", async (event) => {
-      const profile = hotkeys.find((p) => p.id === event.payload)
+      const profile = hotkeysRef.current.find((p) => p.id === event.payload)
       if (!profile) return
 
       // No combo file attached → toggle the current UI combo.
       if (!profile.comboPath) {
-        toggleRunning()
+        toggleRunningRef.current()
         return
       }
 
@@ -98,7 +116,7 @@ export function useGlobalHotkeys({
 
       // Pressing the profile that's already running → stop.
       if (runningProfileIdRef.current === profile.id) {
-        stopAll()
+        stopAllRef.current()
         runningProfileIdRef.current = null
         return
       }
@@ -114,9 +132,9 @@ export function useGlobalHotkeys({
         // A newer press superseded this one while we were loading.
         if (token !== seqRef.current) return
 
-        applyCombo(combo) // reflect the loaded combo in the tabs
+        applyComboRef.current(combo) // reflect the loaded combo in the tabs
         runningProfileIdRef.current = profile.id
-        startCombo(toRunnerInputs(combo)) // atomic backend switch
+        startComboRef.current(toRunnerInputs(combo)) // atomic backend switch
       } catch {
         if (token === seqRef.current) {
           toast.error(`Failed to load ${profile.name}`)
@@ -126,7 +144,7 @@ export function useGlobalHotkeys({
     return () => {
       unlisten.then((fn) => fn())
     }
-  }, [hotkeys, toggleRunning, startCombo, stopAll, applyCombo, runningProfileIdRef])
+  }, [])
 
   return { clearCachedCombo }
 }

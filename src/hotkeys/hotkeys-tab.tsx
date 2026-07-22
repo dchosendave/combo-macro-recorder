@@ -98,25 +98,31 @@ export function HotkeysTab({
     if (saved) refreshComboFiles(saved)
   }, [])
 
-  const handleKeyCapture = (e: React.KeyboardEvent) => {
+  useEffect(() => {
     if (!capturingId) return
-    e.preventDefault()
-    if (e.key === "Escape") {
+
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault()
+      if (e.key === "Escape") {
+        setCapturingId(null)
+        return
+      }
+      if (["ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight", "MetaLeft", "MetaRight"].includes(e.code)) {
+        return
+      }
+      const parts: string[] = []
+      if (e.ctrlKey) parts.push("Control")
+      if (e.altKey) parts.push("Alt")
+      if (e.shiftKey) parts.push("Shift")
+      if (e.metaKey) parts.push("Meta")
+      parts.push(e.code)
+      onUpdateHotkey(capturingId, parts.join("+"))
       setCapturingId(null)
-      return
     }
-    if (["ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight", "MetaLeft", "MetaRight"].includes(e.code)) {
-      return
-    }
-    const parts: string[] = []
-    if (e.ctrlKey) parts.push("Control")
-    if (e.altKey) parts.push("Alt")
-    if (e.shiftKey) parts.push("Shift")
-    if (e.metaKey) parts.push("Meta")
-    parts.push(e.code)
-    onUpdateHotkey(capturingId, parts.join("+"))
-    setCapturingId(null)
-  }
+
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [capturingId, onUpdateHotkey])
 
   const handleBrowse = async (bindingId: string) => {
     const path = await open({
@@ -129,7 +135,7 @@ export function HotkeysTab({
   }
 
   return (
-    <Card size="sm" className="h-full" onKeyDown={handleKeyCapture} tabIndex={0}>
+    <Card size="sm" className="h-full">
       <CardContent className="flex flex-1 flex-col gap-3 min-h-0 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
           {hotkeys.map((binding) => (

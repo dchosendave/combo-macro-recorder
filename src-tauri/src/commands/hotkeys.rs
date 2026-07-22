@@ -25,17 +25,36 @@ pub fn set_hotkeys(
     state: State<'_, HotkeyState>,
 ) -> Result<(), String> {
     let gs = app.global_shortcut();
-    let _ = gs.unregister_all();
 
     let mut mappings = state.mappings.lock().unwrap();
-    mappings.clear();
+
+    let new_mappings: HashMap<String, String> = hotkeys
+        .iter()
+        .map(|h| {
+            let key = Shortcut::from_str(&h.shortcut)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|_| h.shortcut.clone());
+            (key, h.hotkey_id.clone())
+        })
+        .collect();
+
+    for (key, _) in mappings.iter() {
+        if !new_mappings.contains_key(key) {
+            if let Ok(shortcut) = Shortcut::from_str(key) {
+                let _ = gs.unregister(shortcut);
+            }
+        }
+    }
 
     for h in &hotkeys {
-        gs.register(h.shortcut.as_str()).map_err(|e| e.to_string())?;
         let key = Shortcut::from_str(&h.shortcut)
             .map(|s| s.to_string())
             .unwrap_or_else(|_| h.shortcut.clone());
-        mappings.insert(key, h.hotkey_id.clone());
+        if !mappings.contains_key(&key) {
+            gs.register(h.shortcut.as_str()).map_err(|e| e.to_string())?;
+        }
     }
+
+    *mappings = new_mappings;
     Ok(())
 }
