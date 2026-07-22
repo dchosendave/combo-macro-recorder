@@ -477,7 +477,7 @@ dependencies = [
 
 [[package]]
 name = "combo-macro-recorder"
-version = "1.0.5"
+version = "1.0.6"
 dependencies = [
  "enigo",
  "serde",
