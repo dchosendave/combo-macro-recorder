@@ -1,5 +1,15 @@
 import type { SkillStep } from "@/shared/types"
 
+/** Normalize a raw Jitbit key token into a single alphanumeric key character.
+ *  - D0–D9 → strip the D prefix (top-row digit keys vs numpad)
+ *  - Single alphanumeric chars pass through
+ *  - Everything else → null (invalid) */
+function normalizeKey(raw: string): string | null {
+  if (/^D[0-9]$/i.test(raw)) return raw[1]
+  if (/^[A-Za-z0-9]$/.test(raw)) return raw
+  return null
+}
+
 export function parseJitbit(text: string): SkillStep[] {
   const steps: SkillStep[] = []
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
@@ -11,9 +21,11 @@ export function parseJitbit(text: string): SkillStep[] {
       continue
     }
 
-    const kbdMatch = line.match(/^Keyboard\s*:\s*([A-Za-z0-9])\s*:\s*(KeyDown|KeyUp)/i)
+    const kbdMatch = line.match(/^Keyboard\s*:\s*([A-Za-z0-9]+)\s*:\s*(KeyDown|KeyUp)/i)
     if (kbdMatch) {
-      const key = kbdMatch[1]
+      const raw = kbdMatch[1]
+      const key = normalizeKey(raw)
+      if (!key) continue
       const action = kbdMatch[2].toLowerCase() === "keydown" ? "keydown" : "keyup"
       steps.push({ id: crypto.randomUUID(), type: action, key })
       continue
