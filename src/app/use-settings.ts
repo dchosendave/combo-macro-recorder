@@ -7,6 +7,7 @@ import { usePotionSettings } from "@/potions/use-potion-settings"
 import { useSkillSettings } from "@/skills/use-skill-settings"
 import { useHotkeySettings } from "@/hotkeys/use-hotkey-settings"
 
+/** Owns all editable app state: potions, skills, and hotkey profiles. Exposes tab-level setters, `applyCombo` (load a combo into the tabs), `buildSettings` (snapshot), and `reset`. */
 export function useSettings() {
   const potions = usePotionSettings(defaultPotionConfig())
   const skills = useSkillSettings(defaultSkillConfig())

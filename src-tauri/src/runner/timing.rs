@@ -110,3 +110,49 @@ fn fallback_spin(ms: u64, running: &AtomicBool) {
         std::hint::spin_loop();
     }
 }
+
+#[cfg(test)]
+#[cfg(target_os = "windows")]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use std::time::Instant;
+
+    use super::*;
+
+    #[test]
+    fn zero_delay_returns_immediately() {
+        let running = Arc::new(AtomicBool::new(true));
+        let start = Instant::now();
+        sleep_precise(0, &running);
+        assert!(start.elapsed() < Duration::from_millis(50));
+    }
+
+    #[test]
+    fn sleeps_approximately_the_requested_duration() {
+        let running = Arc::new(AtomicBool::new(true));
+        let start = Instant::now();
+        sleep_precise(200, &running);
+        let elapsed = start.elapsed();
+        assert!(elapsed >= Duration::from_millis(150), "slept only {elapsed:?}");
+        assert!(elapsed <= Duration::from_millis(1000), "slept {elapsed:?}, way too long");
+    }
+
+    #[test]
+    fn cancellation_returns_promptly() {
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = running.clone();
+
+        let start = Instant::now();
+        let handle = std::thread::spawn(move || sleep_precise(2000, &running_clone));
+
+        std::thread::sleep(Duration::from_millis(50));
+        running.store(false, Ordering::SeqCst);
+        handle.join().unwrap();
+
+        assert!(
+            start.elapsed() < Duration::from_millis(1000),
+            "cancelled sleep must not wait out the full duration"
+        );
+    }
+}

@@ -1,10 +1,12 @@
 import { defaultPotionConfig, defaultSkillConfig } from "@/shared/defaults"
 import type { CurrentCombo, SkillStep } from "@/shared/types"
 
+/** Serialize a combo to the versioned JSON file format (currently v3). */
 export function exportComboToString(current: CurrentCombo): string {
   return JSON.stringify({ version: 3, potions: current.potions, skills: current.skills }, null, 2)
 }
 
+/** Parse a combo file. Accepts v2/v3; parsed values are merged over defaults, so missing fields degrade gracefully. Throws on invalid JSON or unknown versions. */
 export function importComboFromString(json: string): CurrentCombo {
   let parsed: unknown
   try { parsed = JSON.parse(json) } catch { throw new Error("Invalid JSON") }

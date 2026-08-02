@@ -10,6 +10,7 @@ function normalizeKey(raw: string): string | null {
   return null
 }
 
+/** Parse a Jitbit Macro Recorder script (lines of `DELAY : N` and `Keyboard : KEY : KeyDown|KeyUp`). Invalid keys are skipped. */
 export function parseJitbit(text: string): SkillStep[] {
   const steps: SkillStep[] = []
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
@@ -35,6 +36,7 @@ export function parseJitbit(text: string): SkillStep[] {
   return steps
 }
 
+/** Build a combo from manual entry: keydowns with inter-key delays, a delay before the keyups, reverse-order keyups, and a final rest delay. */
 export function parseCombo(keysInput: string, delaysInput: string): SkillStep[] {
   const keys = keysInput.split(",").map((k) => k.trim()).filter(Boolean)
   const delays = delaysInput.split(",").map((d) => d.trim()).filter(Boolean)

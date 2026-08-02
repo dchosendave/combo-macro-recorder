@@ -9,6 +9,7 @@ const MIN_CONSTRAINTS = { minWidth: 660, minHeight: 720 }
 const CORNER_KEY = "combo-macro-compact-corner"
 const MARGIN = 0
 
+/** Collapses the window to a 500x68 overlay parked in a screen corner while a combo runs, restoring size/position/min-size constraints on exit. `auto` corner picks the corner matching the window center relative to the work area. */
 export function useCompactMode() {
   const [compactMode, setCompactMode] = useState(false)
   const [savedSize, setSavedSize] = useState<LogicalSize | null>(null)

@@ -17,6 +17,7 @@ type UseComboFileArgs = {
 
 type PendingAction = "open" | "new"
 
+/** Combo file lifecycle: open/save/save-as/new with dirty tracking (string comparison against a baseline snapshot), unsaved-changes confirm dialogs, Ctrl+S, and auto-load of the last file on startup. */
 export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs) {
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [baseline, setBaseline] = useState(EMPTY_BASELINE)

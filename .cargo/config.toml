@@ -1,0 +1,4 @@
+[build]
+# Keep Rust artifacts where they've always been — README/AGENTS document
+# `src-tauri/target/...` as the bundle output location.
+target-dir = "src-tauri/target"

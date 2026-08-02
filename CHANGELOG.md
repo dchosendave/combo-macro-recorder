@@ -1,0 +1,74 @@
+# Changelog
+
+All notable changes to Hamin Macro Recorder are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## Unreleased
+
+- Document usage in the README (features, quick start, combo file format, troubleshooting).
+
+## [1.0.7] - 2026-07-23
+
+### Fixed
+
+- Global hotkeys not triggering their combo reliably.
+
+## [1.0.6] - 2026-07-22
+
+### Fixed
+
+- Jitbit macro import producing incorrect steps.
+
+## [1.0.5] - 2026-07-18
+
+### Changed
+
+- UI/UX polish, including improved dark and light theme handling.
+
+## [1.0.4] - 2026-07-18
+
+### Added
+
+- Live keyboard recording (capture keystrokes into the skill step list).
+- Select-all / delete-all actions with confirmation dialog.
+
+### Changed
+
+- Internal source restructure (feature folders, kebab-case file names).
+
+## [1.0.3] - 2026-07-18
+
+### Fixed
+
+- Release tags aligned with release names.
+
+## [1.0.2] - 2026-07-18
+
+### Added
+
+- GitHub Actions workflow that builds the app and uploads a draft release on new `v*` tags.
+
+## [1.0.0 / 1.0.1] - 2026-07-10 to 2026-07-18 (untagged)
+
+Core app. This section is reconstructed from commit history and is approximate.
+
+### Added
+
+- Potion key macro (auto-press Q/W/E/R) with configurable delay and repeat counts.
+- Skill combo builder with keydown/keyup/delay steps, scroll/drag reordering, and repeat-N mode.
+- Multiple global hotkey profiles, each bound to a combo file (hotkey auto-naming).
+- Combo files: new/open/save, auto-open the last saved combo on startup.
+- Jitbit-compatible key timing and delays.
+- Borderless window with custom title bar and final app branding.
+
+### Changed
+
+- Loop timing reworked (stable delays, no drift, immediate stop).
+- Repeat counts match Jitbit/Razer Macro timing behavior.
+
+<!--
+Maintenance: add a new section for each release. Releases are created by
+bumping the version (scripts/bump-version.ps1) and pushing a `v*` tag; the CI
+workflow uploads the installer to a draft GitHub release.
+-->

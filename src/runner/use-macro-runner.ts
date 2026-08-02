@@ -17,6 +17,12 @@ type UseMacroRunnerArgs = {
   onStop?: () => void
 }
 
+/**
+ * Drives the backend runner: start/stop/toggle combos via Tauri commands and
+ * mirrors running state from the `macro-activation` / `macro-finished` events.
+ * `startCombo` swaps channels atomically on the backend, so it is safe to call
+ * immediately after loading a combo file without waiting for a re-render.
+ */
 export function useMacroRunner({
   potionsCanRun,
   potionsConfig,

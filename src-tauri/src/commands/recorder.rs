@@ -149,6 +149,8 @@ fn set_high_priority() {
 
 // ── Tauri commands ─────────────────────────────────────
 
+/// Starts the recording poll thread. Records keystrokes system-wide regardless
+/// of window focus; errors if already recording.
 #[tauri::command]
 pub fn start_recording() -> Result<(), String> {
     let mut state = RECORDING.lock().map_err(|e| e.to_string())?;
@@ -173,6 +175,8 @@ pub fn start_recording() -> Result<(), String> {
     Ok(())
 }
 
+/// Stops the recording poll thread, joins it, and returns the recorded events
+/// (keydown/keyup with millisecond timestamps relative to recording start).
 #[tauri::command]
 pub fn stop_recording() -> Result<Vec<RecordedEvent>, String> {
     let mut state = RECORDING.lock().map_err(|e| e.to_string())?;
@@ -202,4 +206,73 @@ pub fn stop_recording() -> Result<Vec<RecordedEvent>, String> {
 
     let events = state.events.drain(..).collect();
     Ok(events)
+}
+
+#[cfg(test)]
+#[cfg(target_os = "windows")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vk_to_readable_covers_known_keys() {
+        assert_eq!(vk_to_readable(0x41), "A");
+        assert_eq!(vk_to_readable(0x30), "0");
+        assert_eq!(vk_to_readable(0x60), "Num0");
+        assert_eq!(vk_to_readable(0x69), "Num9");
+        assert_eq!(vk_to_readable(0x70), "F1");
+        assert_eq!(vk_to_readable(0x7A), "F11");
+        assert_eq!(vk_to_readable(0x83), "F20");
+        assert_eq!(vk_to_readable(0x08), "Backspace");
+        assert_eq!(vk_to_readable(0x0D), "Enter");
+        assert_eq!(vk_to_readable(0x20), "Space");
+        assert_eq!(vk_to_readable(0xBA), ";");
+        assert_eq!(vk_to_readable(0xDB), "[");
+        assert_eq!(vk_to_readable(0xDE), "'");
+    }
+
+    #[test]
+    fn vk_to_readable_falls_back_to_vk_prefix() {
+        assert_eq!(vk_to_readable(0x5B), "VK_91");
+        assert_eq!(vk_to_readable(0x00), "VK_0");
+    }
+
+    #[test]
+    fn should_track_skips_modifiers_and_unknown_codes() {
+        // Letters, digits, F-keys, and common special keys are tracked.
+        assert!(should_track(0x41)); // A
+        assert!(should_track(0x30)); // 0
+        assert!(should_track(0x70)); // F1
+        assert!(should_track(0x20)); // Space
+        assert!(should_track(0xBA)); // ;
+        // Modifiers are intentionally skipped.
+        assert!(!should_track(0x10)); // Shift
+        assert!(!should_track(0x11)); // Ctrl
+        assert!(!should_track(0x12)); // Alt
+        // Out-of-range / uncommon codes are skipped.
+        assert!(!should_track(0x00));
+        assert!(!should_track(0x1C));
+    }
+
+    #[test]
+    fn recording_lifecycle_starts_once_and_stops_with_events() {
+        // The RECORDING static is per test binary; no other test touches it.
+        start_recording().expect("recording should start");
+        assert!(start_recording().is_err(), "double-start must error");
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let events = stop_recording().expect("recording should stop");
+
+        for e in &events {
+            assert!(!e.key.is_empty(), "recorded events must carry a readable key");
+            assert!(
+                e.action == "keydown" || e.action == "keyup",
+                "recorded action must be keydown/keyup"
+            );
+        }
+        // Timestamps must be monotonic non-decreasing.
+        assert!(
+            events.windows(2).all(|w| w[0].timestamp_ms <= w[1].timestamp_ms),
+            "recorded timestamps must be monotonic"
+        );
+    }
 }

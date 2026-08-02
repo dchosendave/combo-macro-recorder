@@ -32,6 +32,7 @@ function eventsToSteps(events: RecordedEvent[]): SkillStep[] {
   return steps
 }
 
+/** Records real keystrokes system-wide via the backend polling thread and converts them into skill steps (delay + keydown/keyup). */
 export function useRecorder() {
   const [isRecording, setIsRecording] = useState(false)
 

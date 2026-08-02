@@ -24,6 +24,7 @@ function resolveShortcutCode(code: string): string {
   return codeNames[code] ?? code
 }
 
+/** Normalize a captured `KeyboardEvent.code` (e.g. `KeyQ`, `Digit1`, `Numpad0`, `Control+F5`) into a shortcut string the Rust global-shortcut plugin accepts. */
 export function codeToShortcut(code: string): string {
   return code.split("+").map((token) => {
     if (MODIFIER_SET.has(token)) return token
@@ -61,6 +62,7 @@ const MODIFIER_LABELS: Record<string, string> = {
   Meta: "Cmd",
 }
 
+/** Render a shortcut string (e.g. `Control+F5`) as a compact UI label (e.g. `Ctrl+F5`). */
 export function codeToLabel(code: string): string {
   return code.split("+").map((token) => MODIFIER_LABELS[token] ?? resolveLabelCode(token)).join("+")
 }

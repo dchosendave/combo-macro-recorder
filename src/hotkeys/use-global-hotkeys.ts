@@ -17,6 +17,15 @@ type UseGlobalHotkeysArgs = {
   runningProfileIdRef: MutableRefObject<string | null>
 }
 
+/**
+ * Wires OS-level global hotkeys to combo execution.
+ *
+ * Flow: registers shortcuts (debounced) via `set_hotkeys`; the Rust global-shortcut
+ * handler emits a `macro-toggle` event with the profile id, which is handled here.
+ * Combos are preloaded into a cache so presses are instant; a monotonic token makes
+ * the last press win if a file load is still in flight. A press on the profile that
+ * is already running stops it instead.
+ */
 export function useGlobalHotkeys({
   hotkeys,
   toggleRunning,

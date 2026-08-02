@@ -2,28 +2,48 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use serde::Deserialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 
+use super::injector::KeyInjector;
 use super::timing::{set_high_priority, sleep_precise};
 use super::AppState;
 
 #[derive(Deserialize, Clone)]
-struct Keys {
-    q: bool,
-    w: bool,
-    e: bool,
-    r: bool,
+pub(crate) struct Keys {
+    pub(crate) q: bool,
+    pub(crate) w: bool,
+    pub(crate) e: bool,
+    pub(crate) r: bool,
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PotionConfig {
-    keys: Keys,
-    delay_ms: u64,
-    repeat_mode: String,
-    repeat_count: u64,
+    pub(crate) keys: Keys,
+    pub(crate) delay_ms: u64,
+    pub(crate) repeat_mode: String,
+    pub(crate) repeat_count: u64,
+}
+
+#[cfg(test)]
+impl PotionConfig {
+    pub(crate) fn for_test(
+        q: bool,
+        w: bool,
+        e: bool,
+        r: bool,
+        delay_ms: u64,
+        repeat_mode: &str,
+        repeat_count: u64,
+    ) -> Self {
+        PotionConfig {
+            keys: Keys { q, w, e, r },
+            delay_ms,
+            repeat_mode: repeat_mode.to_string(),
+            repeat_count,
+        }
+    }
 }
 
 fn enabled_potion_keys(keys: &Keys) -> Vec<char> {
@@ -43,13 +63,21 @@ fn enabled_potion_keys(keys: &Keys) -> Vec<char> {
     seq
 }
 
-fn release_all(enigo: &mut Enigo, sequence: &[char]) {
+fn release_all(injector: &mut dyn KeyInjector, sequence: &[char]) {
     for ch in sequence {
-        let _ = enigo.key(Key::Unicode(*ch), Direction::Release);
+        injector.release(*ch);
     }
 }
 
-fn run_potions(config: PotionConfig, app: AppHandle, running: Arc<AtomicBool>) {
+/// Potions loop: per cycle, press each enabled key in q→w→e→r order, wait
+/// `delay_ms`, release. Emits `macro-activation` every 10 cycles (throttle) and
+/// `macro-finished` once when Repeat-N is reached. Always releases held keys on exit.
+fn run_potions<R: Runtime>(
+    config: PotionConfig,
+    app: AppHandle<R>,
+    running: Arc<AtomicBool>,
+    injector: &mut dyn KeyInjector,
+) {
     set_high_priority();
 
     let sequence = enabled_potion_keys(&config.keys);
@@ -58,7 +86,6 @@ fn run_potions(config: PotionConfig, app: AppHandle, running: Arc<AtomicBool>) {
         return;
     }
 
-    let mut enigo = Enigo::new(&Settings::default()).ok();
     let mut cycle: u64 = 0;
 
     while running.load(Ordering::SeqCst) {
@@ -66,13 +93,9 @@ fn run_potions(config: PotionConfig, app: AppHandle, running: Arc<AtomicBool>) {
             if !running.load(Ordering::SeqCst) {
                 break;
             }
-            if let Some(enigo) = enigo.as_mut() {
-                let _ = enigo.key(Key::Unicode(*ch), Direction::Press);
-            }
+            injector.press(*ch);
             sleep_precise(config.delay_ms, &running);
-            if let Some(enigo) = enigo.as_mut() {
-                let _ = enigo.key(Key::Unicode(*ch), Direction::Release);
-            }
+            injector.release(*ch);
         }
         cycle += 1;
         if cycle % 10 == 0 {
@@ -92,19 +115,187 @@ fn run_potions(config: PotionConfig, app: AppHandle, running: Arc<AtomicBool>) {
         }
     }
 
-    if let Some(enigo) = enigo.as_mut() {
-        release_all(enigo, &sequence);
-    }
+    release_all(injector, &sequence);
 }
 
 /// Spawns the potions loop on a dedicated thread. The caller is responsible for
 /// stopping the channel beforehand (see `start_combo`).
-pub(crate) fn spawn_potions(config: PotionConfig, app: &AppHandle, state: &AppState) {
+pub(crate) fn spawn_potions<R: Runtime>(config: PotionConfig, app: &AppHandle<R>, state: &AppState) {
     let running = state.potions.running.clone();
     running.store(true, Ordering::SeqCst);
 
+    let mut injector = (state.injector_factory)();
     let app = app.clone();
-    let handle = thread::spawn(move || run_potions(config, app, running));
+    let handle = thread::spawn(move || run_potions(config, app, running, &mut *injector));
 
     *state.potions.handle.lock().unwrap() = Some(handle);
+}
+
+#[cfg(test)]
+#[cfg(target_os = "windows")]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    use tauri::Listener;
+
+    use super::*;
+    use crate::runner::injector::test_utils::{InjectedEvent, MockInjector};
+
+    fn app_handle() -> tauri::AppHandle<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap()
+            .handle()
+            .clone()
+    }
+
+    #[test]
+    fn enabled_keys_preserve_qwer_order() {
+        let all = Keys { q: true, w: true, e: true, r: true };
+        assert_eq!(enabled_potion_keys(&all), vec!['q', 'w', 'e', 'r']);
+
+        let subset = Keys { q: true, w: false, e: true, r: false };
+        assert_eq!(enabled_potion_keys(&subset), vec!['q', 'e']);
+
+        let none = Keys { q: false, w: false, e: false, r: false };
+        assert!(enabled_potion_keys(&none).is_empty());
+    }
+
+    #[test]
+    fn count_mode_runs_exact_sequence_then_stops() {
+        let mut injector = MockInjector::default();
+        let running = Arc::new(AtomicBool::new(true));
+
+        run_potions(
+            PotionConfig::for_test(true, true, false, false, 0, "count", 1),
+            app_handle(),
+            running.clone(),
+            &mut injector,
+        );
+
+        assert_eq!(
+            injector.log().lock().unwrap().clone(),
+            vec![
+                InjectedEvent::Press('q'),
+                InjectedEvent::Release('q'),
+                InjectedEvent::Press('w'),
+                InjectedEvent::Release('w'),
+                // release_all cleanup on loop exit
+                InjectedEvent::Release('q'),
+                InjectedEvent::Release('w'),
+            ]
+        );
+        assert!(!running.load(Ordering::SeqCst), "loop must stop after Repeat-N");
+    }
+
+    #[test]
+    fn count_zero_clamps_to_one_cycle() {
+        let mut injector = MockInjector::default();
+        let running = Arc::new(AtomicBool::new(true));
+
+        run_potions(
+            PotionConfig::for_test(true, false, false, false, 0, "count", 0),
+            app_handle(),
+            running.clone(),
+            &mut injector,
+        );
+
+        let events = injector.log().lock().unwrap().clone();
+        assert_eq!(
+            events,
+            vec![
+                InjectedEvent::Press('q'),
+                InjectedEvent::Release('q'),
+                InjectedEvent::Release('q'),
+            ]
+        );
+    }
+
+    #[test]
+    fn loop_mode_releases_all_keys_when_cancelled() {
+        let mut injector = MockInjector::default();
+        let log = injector.log();
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = running.clone();
+
+        let handle = std::thread::spawn(move || {
+            run_potions(
+                PotionConfig::for_test(true, true, true, true, 100, "loop", 1),
+                app_handle(),
+                running_clone,
+                &mut injector,
+            )
+        });
+
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        running.store(false, Ordering::SeqCst);
+        handle.join().unwrap();
+
+        let events = log.lock().unwrap().clone();
+        assert!(!events.is_empty(), "loop should have injected before cancellation");
+        // Every pressed key must be released (mid-loop or cleanup), and the
+        // cleanup pass releases the full sequence last.
+        let mut pressed = std::collections::HashMap::new();
+        for e in &events {
+            match e {
+                InjectedEvent::Press(c) => *pressed.entry(*c).or_insert(0i32) += 1,
+                InjectedEvent::Release(c) => *pressed.entry(*c).or_insert(0i32) -= 1,
+                _ => {}
+            }
+        }
+        assert!(
+            pressed.values().all(|v| *v <= 0),
+            "every pressed key must be released: {pressed:?}"
+        );
+        assert!(
+            events.ends_with(&[
+                InjectedEvent::Release('q'),
+                InjectedEvent::Release('w'),
+                InjectedEvent::Release('e'),
+                InjectedEvent::Release('r'),
+            ]),
+            "cleanup must release the full sequence last"
+        );
+        assert!(!running.load(Ordering::SeqCst), "cancelled loop must clear running");
+    }
+
+    #[test]
+    fn empty_keys_stop_immediately_without_injecting() {
+        let mut injector = MockInjector::default();
+        let running = Arc::new(AtomicBool::new(true));
+
+        run_potions(
+            PotionConfig::for_test(false, false, false, false, 0, "loop", 1),
+            app_handle(),
+            running.clone(),
+            &mut injector,
+        );
+
+        assert!(!running.load(Ordering::SeqCst));
+        assert!(injector.log().lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn activation_event_throttled_to_every_10_cycles() {
+        let handle = app_handle();
+        let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count_clone = count.clone();
+        let _unlisten = handle.listen("macro-activation", move |_| {
+            count_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        let mut injector = MockInjector::default();
+        let running = Arc::new(AtomicBool::new(true));
+
+        // 25 cycles → activations at cycle 10 and 20 only.
+        run_potions(
+            PotionConfig::for_test(true, true, true, true, 0, "count", 25),
+            handle,
+            running.clone(),
+            &mut injector,
+        );
+
+        assert_eq!(count.load(Ordering::SeqCst), 2, "potions activation must be throttled to every 10th cycle");
+    }
 }
