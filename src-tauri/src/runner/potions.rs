@@ -2,10 +2,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
+use enigo::Key;
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, Runtime};
 
-use super::injector::KeyInjector;
+use super::injector::{KeyInjector, KeyReleaseGuard};
 use super::timing::{set_high_priority, sleep_precise};
 use super::AppState;
 
@@ -63,15 +64,12 @@ fn enabled_potion_keys(keys: &Keys) -> Vec<char> {
     seq
 }
 
-fn release_all(injector: &mut dyn KeyInjector, sequence: &[char]) {
-    for ch in sequence {
-        injector.release(*ch);
-    }
-}
-
 /// Potions loop: per cycle, press each enabled key in q→w→e→r order, wait
 /// `delay_ms`, release. Emits `macro-activation` every 10 cycles (throttle) and
-/// `macro-finished` once when Repeat-N is reached. Always releases held keys on exit.
+/// `macro-finished` once when Repeat-N is reached.
+///
+/// All presses go through a [`KeyReleaseGuard`], whose `Drop` releases the full
+/// sequence on normal return, Repeat-N completion, cancellation, or panic.
 fn run_potions<R: Runtime>(
     config: PotionConfig,
     app: AppHandle<R>,
@@ -86,6 +84,12 @@ fn run_potions<R: Runtime>(
         return;
     }
 
+    let mut guard = KeyReleaseGuard::new(
+        injector,
+        sequence.iter().map(|c| Key::Unicode(*c)).collect(),
+        false,
+    );
+
     let mut cycle: u64 = 0;
 
     while running.load(Ordering::SeqCst) {
@@ -93,9 +97,9 @@ fn run_potions<R: Runtime>(
             if !running.load(Ordering::SeqCst) {
                 break;
             }
-            injector.press(*ch);
+            guard.press(Key::Unicode(*ch));
             sleep_precise(config.delay_ms, &running);
-            injector.release(*ch);
+            guard.release(Key::Unicode(*ch));
         }
         cycle += 1;
         if cycle % 10 == 0 {
@@ -114,8 +118,7 @@ fn run_potions<R: Runtime>(
             break;
         }
     }
-
-    release_all(injector, &sequence);
+    // guard drops here: releases the full sequence
 }
 
 /// Spawns the potions loop on a dedicated thread. The caller is responsible for
@@ -128,7 +131,7 @@ pub(crate) fn spawn_potions<R: Runtime>(config: PotionConfig, app: &AppHandle<R>
     let app = app.clone();
     let handle = thread::spawn(move || run_potions(config, app, running, &mut *injector));
 
-    *state.potions.handle.lock().unwrap() = Some(handle);
+    *state.potions.handle.lock() = Some(handle);
 }
 
 #[cfg(test)]
@@ -175,15 +178,15 @@ mod tests {
         );
 
         assert_eq!(
-            injector.log().lock().unwrap().clone(),
+            injector.log().lock().clone(),
             vec![
-                InjectedEvent::Press('q'),
-                InjectedEvent::Release('q'),
-                InjectedEvent::Press('w'),
-                InjectedEvent::Release('w'),
-                // release_all cleanup on loop exit
-                InjectedEvent::Release('q'),
-                InjectedEvent::Release('w'),
+                InjectedEvent::Press(Key::Unicode('q')),
+                InjectedEvent::Release(Key::Unicode('q')),
+                InjectedEvent::Press(Key::Unicode('w')),
+                InjectedEvent::Release(Key::Unicode('w')),
+                // guard cleanup on loop exit
+                InjectedEvent::Release(Key::Unicode('q')),
+                InjectedEvent::Release(Key::Unicode('w')),
             ]
         );
         assert!(!running.load(Ordering::SeqCst), "loop must stop after Repeat-N");
@@ -201,13 +204,13 @@ mod tests {
             &mut injector,
         );
 
-        let events = injector.log().lock().unwrap().clone();
+        let events = injector.log().lock().clone();
         assert_eq!(
             events,
             vec![
-                InjectedEvent::Press('q'),
-                InjectedEvent::Release('q'),
-                InjectedEvent::Release('q'),
+                InjectedEvent::Press(Key::Unicode('q')),
+                InjectedEvent::Release(Key::Unicode('q')),
+                InjectedEvent::Release(Key::Unicode('q')),
             ]
         );
     }
@@ -232,15 +235,15 @@ mod tests {
         running.store(false, Ordering::SeqCst);
         handle.join().unwrap();
 
-        let events = log.lock().unwrap().clone();
+        let events = log.lock().clone();
         assert!(!events.is_empty(), "loop should have injected before cancellation");
         // Every pressed key must be released (mid-loop or cleanup), and the
         // cleanup pass releases the full sequence last.
         let mut pressed = std::collections::HashMap::new();
         for e in &events {
             match e {
-                InjectedEvent::Press(c) => *pressed.entry(*c).or_insert(0i32) += 1,
-                InjectedEvent::Release(c) => *pressed.entry(*c).or_insert(0i32) -= 1,
+                InjectedEvent::Press(k) => *pressed.entry(*k).or_insert(0i32) += 1,
+                InjectedEvent::Release(k) => *pressed.entry(*k).or_insert(0i32) -= 1,
                 _ => {}
             }
         }
@@ -250,10 +253,10 @@ mod tests {
         );
         assert!(
             events.ends_with(&[
-                InjectedEvent::Release('q'),
-                InjectedEvent::Release('w'),
-                InjectedEvent::Release('e'),
-                InjectedEvent::Release('r'),
+                InjectedEvent::Release(Key::Unicode('q')),
+                InjectedEvent::Release(Key::Unicode('w')),
+                InjectedEvent::Release(Key::Unicode('e')),
+                InjectedEvent::Release(Key::Unicode('r')),
             ]),
             "cleanup must release the full sequence last"
         );
@@ -273,7 +276,7 @@ mod tests {
         );
 
         assert!(!running.load(Ordering::SeqCst));
-        assert!(injector.log().lock().unwrap().is_empty());
+        assert!(injector.log().lock().is_empty());
     }
 
     #[test]

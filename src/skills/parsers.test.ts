@@ -1,28 +1,167 @@
 import { describe, it, expect } from "vitest"
-import { readFileSync, readdirSync } from "fs"
-import { fileURLToPath } from "url"
-import { dirname, resolve } from "path"
-import { parseJitbit } from "./parsers"
+import { parseJitbit, parseJitbitFile } from "./parsers"
 import type { SkillStep } from "@/shared/types"
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const macrosDir = resolve(__dirname, "../../macros")
 
 function stripId(steps: SkillStep[]) {
   return steps.map(({ id: _id, ...rest }) => rest)
 }
 
-describe("parseJitbit from .mcr fixtures", () => {
-  const files = readdirSync(macrosDir).filter((f) => f.endsWith(".mcr"))
+// Inline .mcr-style fixtures (the old macros/ directory was gitignored and
+// absent from fresh clones, which broke `npm test`).
+const FIXTURES: Record<string, string> = {
+  "skill-combo.mcr": [
+    "DELAY : 100",
+    "Keyboard : D1 : KeyDown",
+    "Keyboard : D1 : KeyUp",
+    "Keyboard : D2 : KeyDown",
+    "DELAY : 50",
+    "Keyboard : D2 : KeyUp",
+    "",
+  ].join("\n"),
+  "named-keys.mcr": [
+    "Keyboard : Space : KeyDown",
+    "DELAY : 30",
+    "Keyboard : Space : KeyUp",
+    "Keyboard : F1 : KeyDown",
+    "Keyboard : F1 : KeyUp",
+    "Keyboard : Num0 : KeyDown",
+    "Keyboard : Num0 : KeyUp",
+    "",
+  ].join("\n"),
+}
 
-  for (const file of files) {
-    it(`parses ${file} correctly`, () => {
-      const content = readFileSync(`${macrosDir}/${file}`, "utf-8")
-      const result = parseJitbit(content)
-      expect(stripId(result)).toMatchSnapshot()
-    })
-  }
+describe("parseJitbit from .mcr fixtures", () => {
+  it("parses skill-combo.mcr correctly", () => {
+    expect(stripId(parseJitbit(FIXTURES["skill-combo.mcr"]))).toEqual([
+      { type: "delay", ms: "100" },
+      { type: "keydown", key: "1" },
+      { type: "keyup", key: "1" },
+      { type: "keydown", key: "2" },
+      { type: "delay", ms: "50" },
+      { type: "keyup", key: "2" },
+    ])
+  })
+
+  it("parses named-keys.mcr correctly", () => {
+    expect(stripId(parseJitbit(FIXTURES["named-keys.mcr"]))).toEqual([
+      { type: "keydown", key: "SPACE" },
+      { type: "delay", ms: "30" },
+      { type: "keyup", key: "SPACE" },
+      { type: "keydown", key: "F1" },
+      { type: "keyup", key: "F1" },
+      { type: "keydown", key: "NUM0" },
+      { type: "keyup", key: "NUM0" },
+    ])
+  })
+})
+
+describe("parseJitbitFile strict file import", () => {
+  it("accepts pure keyboard macros", () => {
+    const result = parseJitbitFile("DELAY : 100\nKeyboard : D1 : KeyDown\nKeyboard : D1 : KeyUp\n")
+    expect("steps" in result).toBe(true)
+    if ("steps" in result) {
+      expect(stripId(result.steps)).toEqual([
+        { type: "delay", ms: "100" },
+        { type: "keydown", key: "1" },
+        { type: "keyup", key: "1" },
+      ])
+    }
+  })
+
+  it("rejects mouse-movement rows with the offending line", () => {
+    const result = parseJitbitFile(
+      "DELAY : 50\nMoveMouse : 100 : 200\nKeyboard : D1 : KeyDown\n",
+    )
+    expect("rejected" in result).toBe(true)
+    if ("rejected" in result) {
+      expect(result.rejected.line).toBe(2)
+      expect(result.rejected.text).toBe("MoveMouse : 100 : 200")
+    }
+  })
+
+  it("rejects mixed keyboard + mouse macros entirely", () => {
+    const result = parseJitbitFile(
+      "Keyboard : D1 : KeyDown\nClickMouse : LEFT : 1\nKeyboard : D1 : KeyUp\n",
+    )
+    expect("rejected" in result).toBe(true)
+  })
+
+  it("strips a single RightButtonDown at the top", () => {
+    const result = parseJitbitFile(
+      "Mouse : 0 : 0 : RightButtonDown : 0 : 1 : 0\nKeyboard : D1 : KeyDown\nKeyboard : D1 : KeyUp",
+    )
+    expect("steps" in result).toBe(true)
+    if ("steps" in result) {
+      expect(stripId(result.steps)).toEqual([
+        { type: "keydown", key: "1" },
+        { type: "keyup", key: "1" },
+      ])
+    }
+  })
+
+  it("strips a single RightButtonDown at the end", () => {
+    const result = parseJitbitFile(
+      "Keyboard : D1 : KeyDown\nMouse : 0 : 0 : RightButtonDown : 0 : 1 : 0",
+    )
+    expect("steps" in result).toBe(true)
+    if ("steps" in result) {
+      expect(result.steps).toHaveLength(1)
+    }
+  })
+
+  it("rejects a RightButtonDown in the middle of the macro", () => {
+    const result = parseJitbitFile(
+      "Keyboard : D1 : KeyDown\nMouse : 0 : 0 : RightButtonDown : 0 : 1 : 0\nKeyboard : D1 : KeyUp",
+    )
+    expect("rejected" in result).toBe(true)
+    if ("rejected" in result) {
+      expect(result.rejected.line).toBe(2)
+      expect(result.rejected.reason).toContain("start or end")
+    }
+  })
+
+  it("rejects multiple RightButtonDown rows", () => {
+    const result = parseJitbitFile(
+      "Mouse : 0 : 0 : RightButtonDown : 0 : 1 : 0\nKeyboard : D1 : KeyDown\nMouse : 5 : 5 : RightButtonDown : 0 : 1 : 0",
+    )
+    expect("rejected" in result).toBe(true)
+    if ("rejected" in result) {
+      expect(result.rejected.line).toBe(3)
+    }
+  })
+
+  it("rejects unknown command rows", () => {
+    const result = parseJitbitFile("Text : hello\nKeyboard : A : KeyDown")
+    expect("rejected" in result).toBe(true)
+    if ("rejected" in result) {
+      expect(result.rejected.line).toBe(1)
+    }
+  })
+
+  it("keeps keyboard rows with unsupported key tokens and skips the key", () => {
+    const result = parseJitbitFile("Keyboard : LCTRL : KeyDown\nKeyboard : S : KeyDown")
+    expect("steps" in result).toBe(true)
+    if ("steps" in result) {
+      expect(result.steps).toHaveLength(1)
+      expect(result.steps[0]).toMatchObject({ type: "keydown", key: "S" })
+    }
+  })
+
+  it("empty file yields no steps", () => {
+    const result = parseJitbitFile("\n  \n")
+    expect("steps" in result).toBe(true)
+    if ("steps" in result) {
+      expect(result.steps).toEqual([])
+    }
+  })
+
+  it("reports the original file line number even with blank rows", () => {
+    const result = parseJitbitFile("DELAY : 10\n\n\nScrollMouse : UP : 1")
+    expect("rejected" in result).toBe(true)
+    if ("rejected" in result) {
+      expect(result.rejected.line).toBe(4)
+    }
+  })
 })
 
 describe("parseJitbit edge cases", () => {
@@ -52,9 +191,13 @@ describe("parseJitbit edge cases", () => {
     expect(result[0]).toMatchObject({ type: "delay", ms: "250" })
   })
 
-  it("skips unknown key tokens (F12, multi-char non-D)", () => {
-    const result = parseJitbit("Keyboard : F12 : KeyDown")
-    expect(result).toEqual([])
+  it("accepts named tokens (F12, Space) and skips unknown ones", () => {
+    const result = parseJitbit(
+      "Keyboard : F12 : KeyDown\nKeyboard : Space : KeyUp\nKeyboard : XYZ : KeyDown",
+    )
+    expect(result).toHaveLength(2)
+    expect(result[0]).toMatchObject({ type: "keydown", key: "F12" })
+    expect(result[1]).toMatchObject({ type: "keyup", key: "SPACE" })
   })
 
   it("is case-insensitive", () => {

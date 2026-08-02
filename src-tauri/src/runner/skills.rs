@@ -2,10 +2,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
+use enigo::Key;
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, Runtime};
 
-use super::injector::KeyInjector;
+use super::injector::{parse_key, KeyInjector, KeyReleaseGuard};
 use super::timing::{set_high_priority, sleep_precise};
 use super::AppState;
 
@@ -46,24 +47,27 @@ impl SkillConfig {
     }
 }
 
-fn char_from_key(key: &str) -> Option<char> {
-    key.chars().next()
-}
-
-fn release_skill_keys(injector: &mut dyn KeyInjector, steps: &[SkillStep]) {
+/// Collects the injectable keys of every key step (keydown or keyup). Keys that
+/// fail to parse were never pressed, so they're excluded from release cleanup.
+fn step_keys(steps: &[SkillStep]) -> Vec<Key> {
+    let mut keys = Vec::new();
     for step in steps {
         if let SkillStep::KeyDown { key } | SkillStep::KeyUp { key } = step {
-            if let Some(ch) = char_from_key(key) {
-                injector.release(ch);
+            if let Some(key) = parse_key(key) {
+                keys.push(key);
             }
         }
     }
+    keys
 }
 
 /// Skills loop: optionally holds right-click for the whole run, then executes the
 /// step list (delay/keydown/keyup) each cycle. Emits `macro-activation` every
-/// cycle and `macro-finished` once when Repeat-N is reached. Always releases the
-/// right-click and all step keys on exit.
+/// cycle and `macro-finished` once when Repeat-N is reached.
+///
+/// All presses go through a [`KeyReleaseGuard`], whose `Drop` releases the
+/// right-click and every step key on normal return, Repeat-N completion,
+/// cancellation, or panic.
 fn run_skills<R: Runtime>(
     config: SkillConfig,
     app: AppHandle<R>,
@@ -74,8 +78,10 @@ fn run_skills<R: Runtime>(
 
     let mut cycle: u64 = 0;
 
+    let mut guard = KeyReleaseGuard::new(injector, step_keys(&config.steps), config.hold_right_click);
+
     if config.hold_right_click {
-        injector.press_right_click();
+        guard.press_right_click();
     }
 
     while running.load(Ordering::SeqCst) {
@@ -88,13 +94,13 @@ fn run_skills<R: Runtime>(
                     sleep_precise(*ms, &running);
                 }
                 SkillStep::KeyDown { key } => {
-                    if let Some(ch) = char_from_key(key) {
-                        injector.press(ch);
+                    if let Some(key) = parse_key(key) {
+                        guard.press(key);
                     }
                 }
                 SkillStep::KeyUp { key } => {
-                    if let Some(ch) = char_from_key(key) {
-                        injector.release(ch);
+                    if let Some(key) = parse_key(key) {
+                        guard.release(key);
                     }
                 }
             }
@@ -114,11 +120,7 @@ fn run_skills<R: Runtime>(
             break;
         }
     }
-
-    if config.hold_right_click {
-        injector.release_right_click();
-    }
-    release_skill_keys(injector, &config.steps);
+    // guard drops here: releases right-click then all step keys
 }
 
 /// Spawns the skills loop on a dedicated thread. The caller is responsible for
@@ -135,7 +137,7 @@ pub(crate) fn spawn_skills<R: Runtime>(config: SkillConfig, app: &AppHandle<R>, 
     let app = app.clone();
     let handle = thread::spawn(move || run_skills(config, app, running, &mut *injector));
 
-    *state.skills.handle.lock().unwrap() = Some(handle);
+    *state.skills.handle.lock() = Some(handle);
 }
 
 #[cfg(test)]
@@ -158,10 +160,77 @@ mod tests {
     }
 
     #[test]
-    fn char_from_key_takes_first_character() {
-        assert_eq!(char_from_key("1"), Some('1'));
-        assert_eq!(char_from_key("abc"), Some('a'));
-        assert_eq!(char_from_key(""), None);
+    fn recorded_special_keys_round_trip_through_the_loop() {
+        // Regression: the recorder emits "Space"/"F1"/"PageUp"… and these used
+        // to be truncated to their first character ('S'/'F'/'P') before injection.
+        let mut injector = MockInjector::default();
+        let running = Arc::new(AtomicBool::new(true));
+
+        run_skills(
+            SkillConfig::for_test(
+                vec![
+                    SkillStep::KeyDown { key: "Space".into() },
+                    SkillStep::KeyUp { key: "Space".into() },
+                    SkillStep::KeyDown { key: "F1".into() },
+                    SkillStep::KeyUp { key: "F1".into() },
+                ],
+                false,
+                "count",
+                1,
+            ),
+            app_handle(),
+            running.clone(),
+            &mut injector,
+        );
+
+        assert_eq!(
+            injector.log().lock().clone(),
+            vec![
+                InjectedEvent::Press(Key::Space),
+                InjectedEvent::Release(Key::Space),
+                InjectedEvent::Press(Key::F1),
+                InjectedEvent::Release(Key::F1),
+                // cleanup releases every step key occurrence (one per step)
+                InjectedEvent::Release(Key::Space),
+                InjectedEvent::Release(Key::Space),
+                InjectedEvent::Release(Key::F1),
+                InjectedEvent::Release(Key::F1),
+            ]
+        );
+    }
+
+    #[test]
+    fn unknown_step_keys_are_skipped_but_do_not_break_the_loop() {
+        let mut injector = MockInjector::default();
+        let running = Arc::new(AtomicBool::new(true));
+
+        run_skills(
+            SkillConfig::for_test(
+                vec![
+                    SkillStep::KeyDown { key: "VK_999".into() },
+                    SkillStep::Delay { ms: 0 },
+                    SkillStep::KeyDown { key: "1".into() },
+                    SkillStep::KeyUp { key: "1".into() },
+                ],
+                false,
+                "count",
+                1,
+            ),
+            app_handle(),
+            running.clone(),
+            &mut injector,
+        );
+
+        assert_eq!(
+            injector.log().lock().clone(),
+            vec![
+                InjectedEvent::Press(Key::Unicode('1')),
+                InjectedEvent::Release(Key::Unicode('1')),
+                InjectedEvent::Release(Key::Unicode('1')),
+                InjectedEvent::Release(Key::Unicode('1')),
+            ],
+            "unparseable keys must be ignored and parseable ones must still run"
+        );
     }
 
     #[test]
@@ -206,16 +275,16 @@ mod tests {
         );
 
         assert_eq!(
-            injector.log().lock().unwrap().clone(),
+            injector.log().lock().clone(),
             vec![
                 InjectedEvent::PressRightClick,
-                InjectedEvent::Press('1'),
-                InjectedEvent::Release('1'),
-                InjectedEvent::Press('2'),
+                InjectedEvent::Press(Key::Unicode('1')),
+                InjectedEvent::Release(Key::Unicode('1')),
+                InjectedEvent::Press(Key::Unicode('2')),
                 InjectedEvent::ReleaseRightClick,
-                InjectedEvent::Release('1'),
-                InjectedEvent::Release('1'),
-                InjectedEvent::Release('2'),
+                InjectedEvent::Release(Key::Unicode('1')),
+                InjectedEvent::Release(Key::Unicode('1')),
+                InjectedEvent::Release(Key::Unicode('2')),
             ]
         );
         assert!(!running.load(Ordering::SeqCst));
@@ -250,10 +319,10 @@ mod tests {
         running.store(false, Ordering::SeqCst);
         handle.join().unwrap();
 
-        let events = log.lock().unwrap().clone();
+        let events = log.lock().clone();
         assert_eq!(
             events.last().unwrap(),
-            &InjectedEvent::Release('1'),
+            &InjectedEvent::Release(Key::Unicode('1')),
             "cleanup must release step keys last"
         );
         assert!(
@@ -305,7 +374,7 @@ mod tests {
         );
 
         assert!(
-            state.skills.handle.lock().unwrap().is_none(),
+            state.skills.handle.lock().is_none(),
             "empty skill combos must not spawn a thread"
         );
         assert!(!state.skills.running.load(Ordering::SeqCst));

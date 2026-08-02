@@ -12,7 +12,10 @@ Tauri 2 + React 19 + TypeScript desktop app ("Hamin Macro Recorder") for auto-pr
 
 ## Testing quirk
 
-- `src/skills/parsers.test.ts` reads `.mcr` fixtures from `macros/` and writes snapshots to `__snapshots__/`. Both directories are **gitignored and absent from the repo** — the suite throws unless you create local `macros/*.mcr` files. Don't add fixtures or snapshots to a commit.
+- `src/skills/parsers.test.ts` uses inline `.mcr`-style fixtures (no external
+  files), so the suite runs on a fresh clone. The old `macros/` fixture dir and
+  `__snapshots__/` are gitignored leftovers — don't re-add them, and don't
+  introduce new snapshot-based tests (they can't be committed).
 - Rust tests must run on Windows. `src-tauri/build.rs` embeds a Common-Controls v6 manifest into every artifact — without it, tauri-linked test binaries crash at load with `0xc0000139` because `comctl32!TaskDialogIndirect` only exists in the WinSxS v6 copy that manifests activate (tauri-apps/tauri#13419). Don't remove that block. The app binary itself gets an identical manifest from tauri-build.
 
 ## Versioning / release

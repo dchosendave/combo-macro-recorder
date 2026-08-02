@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
-import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/defaults"
+import { MIN_DELAY } from "@/shared/defaults"
+import { derivePotionRun } from "@/shared/run-validation"
 import type { PotionConfig, PotionKey, RepeatMode } from "@/shared/types"
 
 export function usePotionSettings(initial: PotionConfig) {
@@ -9,15 +10,6 @@ export function usePotionSettings(initial: PotionConfig) {
   const [delayMs, setDelayMs] = useState(initial.delayMs)
   const [potionsRepeatMode, setPotionsRepeatMode] = useState<RepeatMode>(initial.repeatMode)
   const [potionsRepeatCount, setPotionsRepeatCount] = useState(initial.repeatCount)
-
-  const potionsDelayError =
-    customDelay && delayMs !== "" && Number(delayMs) < MIN_DELAY
-  const potionsRepeatError =
-    potionsRepeatMode === "count" &&
-    (potionsRepeatCount === "" || Number(potionsRepeatCount) < MIN_REPEAT)
-  const anyPotionKeyEnabled = Object.values(potionKeys).some(Boolean)
-  const potionsCanRun =
-    potionsEnabled && anyPotionKeyEnabled && !potionsDelayError && !potionsRepeatError
 
   const togglePotionKey = (key: PotionKey) =>
     setPotionKeys((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -48,15 +40,13 @@ export function usePotionSettings(initial: PotionConfig) {
     [potionsEnabled, potionKeys, customDelay, delayMs, potionsRepeatMode, potionsRepeatCount],
   )
 
-  const potionsConfig = useMemo(
-    () => ({
-      keys: potionKeys,
-      delayMs: !potionsDelayError && delayMs !== "" ? Number(delayMs) : MIN_DELAY,
-      repeatMode: potionsRepeatMode,
-      repeatCount: Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(potionsRepeatCount) || MIN_REPEAT)),
-    }),
-    [potionKeys, delayMs, potionsDelayError, potionsRepeatMode, potionsRepeatCount],
-  )
+  // Can-run gating + backend config come from the shared derivation, so
+  // tabs-edited combos and file-loaded combos behave identically.
+  const derivation = useMemo(() => derivePotionRun(persisted), [persisted])
+  const potionsDelayError = derivation.delayError
+  const potionsRepeatError = derivation.repeatError
+  const potionsCanRun = derivation.canRun
+  const potionsConfig = derivation.config
 
   return {
     potionsEnabled, setPotionsEnabled,

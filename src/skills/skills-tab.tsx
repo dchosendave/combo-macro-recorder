@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowDown, ArrowUp, Circle, ClipboardPaste, Clock, Copy, GripVertical, Lock, LockOpen, Square, Trash2, Undo2, Redo2, Wand2 } from "lucide-react"
+import { invoke } from "@tauri-apps/api/core"
+import { open } from "@tauri-apps/plugin-dialog"
+import { ArrowDown, ArrowUp, Circle, Clock, Copy, FolderOpen, GripVertical, Lock, LockOpen, Square, Trash2, Undo2, Redo2, Wand2 } from "lucide-react"
 import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
@@ -7,7 +9,6 @@ import { Button } from "@/shared/components/ui/button"
 import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select"
-import { Textarea } from "@/shared/components/ui/textarea"
 import { RepeatModeControl } from "@/shared/components/repeat-mode-control"
 import {
   Tooltip,
@@ -35,7 +36,7 @@ import {
 } from "@/shared/components/ui/dialog"
 import { toast } from "sonner"
 import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/types"
-import { parseCombo, parseJitbit } from "@/skills/parsers"
+import { parseCombo, parseJitbitFile } from "@/skills/parsers"
 import { useRecorder } from "@/recorder/use-recorder"
 
 type SkillsTabProps = {
@@ -95,8 +96,6 @@ export function SkillsTab({
   canRedo,
   onRecordedSteps,
 }: SkillsTabProps) {
-  const [jitbitText, setJitbitText] = useState("")
-  const [jitbitOpen, setJitbitOpen] = useState(false)
   const [comboKeys, setComboKeys] = useState("")
   const [comboDelays, setComboDelays] = useState("")
   const [comboOpen, setComboOpen] = useState(false)
@@ -223,17 +222,30 @@ export function SkillsTab({
     return type === "keydown" ? "KD" : type === "keyup" ? "KU" : "DL"
   }
 
-  const handleJitbitParse = () => {
-    if (!jitbitText.trim()) return
-    const parsed = parseJitbit(jitbitText)
-    if (parsed.length === 0) {
-      toast.error("No valid steps found in pasted text")
-      return
+  const handleJitbitFileImport = async () => {
+    try {
+      const path = await open({
+        filters: [{ name: "Jitbit Macro", extensions: ["mcr"] }],
+        multiple: false,
+      })
+      if (!path) return
+      const content = await invoke<string>("read_jitbit_file", { path: path as string })
+      const result = parseJitbitFile(content)
+      if ("rejected" in result) {
+        toast.error(
+          `Rejected at line ${result.rejected.line}: "${result.rejected.text}" — ${result.rejected.reason}`,
+        )
+        return
+      }
+      if (result.steps.length === 0) {
+        toast.error("No valid steps found in file")
+        return
+      }
+      onSetSteps(result.steps)
+      toast.success(`Imported ${result.steps.length} steps from Jitbit file`)
+    } catch (e) {
+      toast.error(`Import failed: ${e}`)
     }
-    onSetSteps(parsed)
-    setJitbitOpen(false)
-    setJitbitText("")
-    toast.success(`Imported ${parsed.length} steps from Jitbit`)
   }
 
   const handleComboGenerate = () => {
@@ -343,42 +355,22 @@ export function SkillsTab({
                     </DialogContent>
                   </Dialog>
 
-                  <Dialog open={jitbitOpen} onOpenChange={setJitbitOpen}>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <DialogTrigger
-                            render={
-                              <Button size="icon" variant="ghost" className="size-8 animate-in fade-in-0 duration-200" aria-label="Import from Jitbit">
-                                <ClipboardPaste className="size-3.5" />
-                              </Button>
-                            }
-                          />
-                        }
-                      />
-                      <TooltipContent>Import from Jitbit</TooltipContent>
-                    </Tooltip>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Import from Jitbit Macro Recorder</DialogTitle>
-                        <DialogDescription>
-                          Paste your Jitbit macro script below.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <Textarea
-                        value={jitbitText}
-                        onChange={(e) => setJitbitText(e.target.value)}
-                        placeholder={`Keyboard : D1 : KeyDown\nDELAY : 85\nKeyboard : D2 : KeyDown\nDELAY : 45\n...`}
-                        rows={10}
-                        className="font-mono text-xs"
-                      />
-                      <DialogFooter>
-                        <Button size="sm" onClick={handleJitbitParse}>
-                          Parse & Import
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-8 animate-in fade-in-0 duration-200"
+                          aria-label="Import from Jitbit"
+                          onClick={() => handleJitbitFileImport()}
+                        >
+                          <FolderOpen className="size-3.5" />
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                      }
+                    />
+                    <TooltipContent>Import from Jitbit (.mcr file)</TooltipContent>
+                  </Tooltip>
                 </>
               )}
 

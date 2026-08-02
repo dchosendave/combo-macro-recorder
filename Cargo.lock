@@ -480,6 +480,7 @@ name = "combo-macro-recorder"
 version = "1.0.7"
 dependencies = [
  "enigo",
+ "parking_lot",
  "serde",
  "serde_json",
  "tauri",

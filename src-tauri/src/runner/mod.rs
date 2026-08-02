@@ -4,9 +4,10 @@ mod skills;
 mod timing;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
+use parking_lot::Mutex;
 use tauri::{AppHandle, Runtime, State};
 
 use injector::{EnigoInjector, KeyInjector};
@@ -47,7 +48,7 @@ impl Default for AppState {
 
 pub(crate) fn stop_channel(state: &ChannelState) {
     state.running.store(false, Ordering::SeqCst);
-    if let Some(handle) = state.handle.lock().unwrap().take() {
+    if let Some(handle) = state.handle.lock().take() {
         let _ = handle.join();
     }
 }
@@ -73,7 +74,7 @@ pub(crate) fn start_combo_inner<R: Runtime>(
     app: &AppHandle<R>,
     state: &AppState,
 ) {
-    let _guard = state.switch_lock.lock().unwrap();
+    let _guard = state.switch_lock.lock();
 
     stop_channel(&state.potions);
     stop_channel(&state.skills);
@@ -93,7 +94,7 @@ pub fn stop_all(state: State<'_, AppState>) {
 
 /// Testable core of `stop_all`.
 pub(crate) fn stop_all_inner(state: &AppState) {
-    let _guard = state.switch_lock.lock().unwrap();
+    let _guard = state.switch_lock.lock();
     stop_channel(&state.potions);
     stop_channel(&state.skills);
 }
@@ -105,6 +106,7 @@ mod tests {
 
     use super::*;
     use crate::runner::injector::test_utils::{InjectedEvent, MockInjector};
+    use enigo::Key;
     use potions::PotionConfig;
     use skills::{SkillConfig, SkillStep};
     use tauri::Manager;
@@ -118,7 +120,7 @@ mod tests {
             .unwrap()
     }
 
-    fn mock_app_with_factory(state: &mut AppState) -> Arc<std::sync::Mutex<Vec<InjectedEvent>>> {
+    fn mock_app_with_factory(state: &mut AppState) -> Arc<Mutex<Vec<InjectedEvent>>> {
         let (mock, log) = MockInjector::new_shared();
         let shared = mock.log();
         state.injector_factory = Arc::new(move || Box::new(MockInjector::with_log(shared.clone())));
@@ -175,9 +177,9 @@ mod tests {
         let state = app.state::<AppState>();
         wait_channel_idle(&state, false, false);
 
-        let events = log.lock().unwrap();
-        assert!(events.contains(&InjectedEvent::Press('q')), "potions channel should have injected");
-        assert!(!events.contains(&InjectedEvent::Press('w')), "disabled key must not be injected");
+        let events = log.lock();
+        assert!(events.contains(&InjectedEvent::Press(Key::Unicode('q'))), "potions channel should have injected");
+        assert!(!events.contains(&InjectedEvent::Press(Key::Unicode('w'))), "disabled key must not be injected");
     }
 
     #[test]
@@ -199,7 +201,7 @@ mod tests {
         // Wait until the potions loop has injected at least one press.
         let start = Instant::now();
         loop {
-            if log.lock().unwrap().iter().any(|e| matches!(e, InjectedEvent::Press(_))) {
+            if log.lock().iter().any(|e| matches!(e, InjectedEvent::Press(_))) {
                 break;
             }
             assert!(start.elapsed() < Duration::from_secs(5), "potions loop never started");
@@ -217,7 +219,7 @@ mod tests {
         let state = app.state::<AppState>();
         wait_channel_idle(&state, false, false);
 
-        let events = log.lock().unwrap().clone();
+        let events = log.lock().clone();
         let first_skill = events
             .iter()
             .position(|e| matches!(e, InjectedEvent::PressRightClick))
@@ -227,14 +229,15 @@ mod tests {
         assert!(
             events[..first_skill]
                 .iter()
-                .all(|e| !matches!(e, InjectedEvent::Press('b') | InjectedEvent::Release('b'))),
+                .all(|e| !matches!(e, InjectedEvent::Press(Key::Unicode('b')) | InjectedEvent::Release(Key::Unicode('b')))),
             "skills events must not appear before potions is stopped"
         );
         // …and nothing from the potions channel after it.
         assert!(
             events[first_skill..].iter().all(|e| !matches!(
                 e,
-                InjectedEvent::Press(c) | InjectedEvent::Release(c) if POTION_CHARS.contains(c)
+                InjectedEvent::Press(Key::Unicode(c)) | InjectedEvent::Release(Key::Unicode(c))
+                    if POTION_CHARS.contains(&c)
             )),
             "potions events must not continue after the switch"
         );

@@ -19,6 +19,36 @@ pub fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+/// Reads a Jitbit `.mcr` file as text. Jitbit exports are usually UTF-8, but
+/// older ones may be UTF-16 with a BOM — both are decoded and any BOM is
+/// stripped. Other encodings fail with a clear error.
+#[tauri::command]
+pub fn read_jitbit_file(path: String) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    decode_text(&bytes).ok_or_else(|| "File is not valid UTF-8 or UTF-16 text".to_string())
+}
+
+fn decode_text(bytes: &[u8]) -> Option<String> {
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        // UTF-16 LE with BOM
+        let units: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        return String::from_utf16(&units).ok();
+    }
+    if bytes.starts_with(&[0xFE, 0xFF]) {
+        // UTF-16 BE with BOM
+        let units: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|c| u16::from_be_bytes([c[0], c[1]]))
+            .collect();
+        return String::from_utf16(&units).ok();
+    }
+    let text = std::str::from_utf8(bytes).ok()?;
+    Some(text.strip_prefix('\u{FEFF}').unwrap_or(text).to_string())
+}
+
 /// Lists `.json` files in a directory, case-insensitive sorted. Used by the
 /// Hotkeys tab's combo-file picker.
 #[tauri::command]
@@ -65,6 +95,42 @@ mod tests {
     fn read_missing_file_errors() {
         let err = read_file("Z:\\definitely\\not\\here.json".into()).unwrap_err();
         assert!(!err.is_empty());
+    }
+
+    #[test]
+    fn read_jitbit_file_decodes_utf8_and_utf16_with_bom() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("combo.mcr").to_string_lossy().into_owned();
+
+        std::fs::write(&path, "Keyboard : D1 : KeyDown\n").unwrap();
+        assert_eq!(
+            read_jitbit_file(path.clone()).unwrap(),
+            "Keyboard : D1 : KeyDown\n"
+        );
+
+        // UTF-8 with BOM
+        std::fs::write(&path, "\u{FEFF}Keyboard : D1 : KeyDown\n").unwrap();
+        assert_eq!(
+            read_jitbit_file(path.clone()).unwrap(),
+            "Keyboard : D1 : KeyDown\n"
+        );
+
+        // UTF-16 LE with BOM
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in "DELAY : 50\n".encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        std::fs::write(&path, &bytes).unwrap();
+        assert_eq!(read_jitbit_file(path).unwrap(), "DELAY : 50\n");
+    }
+
+    #[test]
+    fn read_jitbit_file_rejects_invalid_encodings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("binary.mcr").to_string_lossy().into_owned();
+        // Invalid UTF-8 and no UTF-16 BOM.
+        std::fs::write(&path, [0xFF, 0x00, 0xFE, 0x41]).unwrap();
+        assert!(read_jitbit_file(path).is_err());
     }
 
     #[test]

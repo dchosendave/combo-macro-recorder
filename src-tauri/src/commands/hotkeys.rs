@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Mutex;
+
+use parking_lot::Mutex;
 
 use serde::Deserialize;
 use tauri::{AppHandle, State};
@@ -43,7 +44,7 @@ pub fn set_hotkeys(
 ) -> Result<(), String> {
     let gs = app.global_shortcut();
 
-    let mut mappings = state.mappings.lock().unwrap();
+    let mut mappings = state.mappings.lock();
 
     let new_mappings = build_mappings(&hotkeys);
 

@@ -103,6 +103,7 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 | `stop_all` | — | `()` | Stop both channels under `switch_lock` |
 | `save_file` | `path`, `content` | `()` | Write combo JSON (`fs::write`) |
 | `read_file` | `path` | `string` | Read combo JSON (`fs::read_to_string`) |
+| `read_jitbit_file` | `path` | `string` | Read `.mcr` text (UTF-8, UTF-16 BOM fallback) |
 | `list_combo_files` | `path` (dir) | `{name, path}[]` | List `.json` files in a directory, case-insensitive sorted (used by the Hotkeys tab file picker) |
 | `set_hotkeys` | `hotkeys: {shortcut, hotkeyId}[]` | `()` | Diff-register global shortcuts; unregisters removed ones |
 | `start_recording` | — | `()` | Start the key-polling thread |
@@ -169,19 +170,20 @@ Combos are versioned JSON files (open/save via the file dialogs):
   the backend receives numbers via `toRunnerInputs`.
 - `SkillStep.id` is a frontend-only React key (uuid), never serialized to the backend.
 
-### Validation mirroring (keep in sync!)
+### Validation single source (do not duplicate!)
 
-"Can this channel run?" is derived in **two places** with identical rules:
-
-1. Live UI: `usePotionSettings` / `useSkillSettings` compute `potionsCanRun` / `skillsCanRun`
-2. File-loaded combos: `toRunnerInputs` (`src/runner/runner-inputs.ts`, JSDoc'd) re-derives them
+"Can this channel run?" and the delay/repeat clamps are derived in exactly one
+place: `derivePotionRun` / `deriveSkillRun` in `src/shared/run-validation.ts`.
+Both the live tabs (`usePotionSettings` / `useSkillSettings`) and the
+file-loaded path (`toRunnerInputs` in `src/runner/runner-inputs.ts`, a thin
+facade over the same functions) call it, so a file-loaded combo behaves
+identically to one edited in the tabs.
 
 Rules: potions run if `enabled && any key &&` no delay error (`customDelay && delayMs < MIN_DELAY`
 = 2 ms) `&&` no repeat error; skills run if `enabled && ≥1 keydown step &&` no repeat error.
 Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
 
-**Editing one side without the other makes file-loaded combos behave differently from
-tabs-edited ones.**
+**Never re-implement these rules elsewhere — import the derivations.**
 
 ## Runner internals (`src-tauri/src/runner/`)
 
@@ -197,8 +199,20 @@ tabs-edited ones.**
 - **Skills loop** (`skills.rs`): optionally holds right-click for the whole run, then
   executes the step list (`delay`/`keydown`/`keyup`). Emits `macro-activation` every cycle.
 - Repeat-N mode emits `macro-finished` and stops the channel when the count is reached.
-- Key injection is `enigo::Key::Unicode` with **the first character** of the key string
-  (`char_from_key`); keys are effectively single-character (letters/digits).
+- Key injection: `parse_key` (`src-tauri/src/runner/injector.rs`) maps each step
+  key string to an `enigo::Key`. Single characters inject as `Key::Unicode`
+  (SendInput `KEYEVENTF_UNICODE` — the proven path for letters/digits); named
+  tokens (`Space`, `Enter`, `F1`–`F24`, `Num0`–`Num9`, `PageUp`, arrows, … —
+  the vocabulary emitted by the recorder's `vk_to_readable`) map to real VK
+  keys so recorded special keys replay as themselves. Unknown tokens are
+  skipped. Jitbit import (`src/skills/parsers.ts`) accepts the same tokens.
+- Key release: both loops press/release through a `KeyReleaseGuard`
+  (`injector.rs`) whose `Drop` releases the right-click and every step key on
+  normal return, Repeat-N completion, cancellation, **or panic** (unwinding
+  runs destructors). `lib.rs` also stops both channels on `RunEvent::ExitRequested`,
+  since Windows does not auto-release SendInput-injected keys when the
+  injecting process dies. Hard-killing the process (task manager) is the one
+  path cleanup can't cover.
 
 ## Recording (`src-tauri/src/commands/recorder.rs`)
 
@@ -212,9 +226,25 @@ tabs-edited ones.**
 
 ## Jitbit import (`src/skills/parsers.ts`)
 
+- The Skills tab's "Import from Jitbit" button opens a native file picker
+  (`.mcr` filter); the file is read by the `read_jitbit_file` command
+  (UTF-8, with UTF-16 BOM fallback) and parsed by `parseJitbitFile`.
 - Line format: `DELAY : N` and `Keyboard : KEY : KeyDown|KeyUp` (case-insensitive).
-- Key normalization: `D0–D9` → bare digit (top-row vs numpad); single alphanumeric
-  passes through; anything else is skipped.
+- Key normalization: `D0–D9` → bare digit (top-row vs numpad); single
+  alphanumeric passes through; named tokens (`Space`, `F1`, `Num0`, `PageUp`,
+  arrows, … — same vocabulary as the backend `parse_key`) pass through as
+  uppercase; anything else is skipped.
+- **Strict row validation**: `parseJitbitFile` requires every row to be a
+  keyboard row. Mouse rows (movements/clicks with x/y coordinates), text
+  typing, or any unknown command reject the **entire file** with the
+  offending line number + text — a mixed macro can never be partially
+  imported. Unsupported key tokens on `Keyboard` rows (e.g. modifiers) are
+  skipped as usual.
+- **Tolerated exception**: a single `Mouse : … : RightButtonDown : …` row is
+  stripped when it is the very first or very last non-blank row (Jitbit
+  records the game-focus click / attack hold there). In the middle, or more
+  than once, the file is rejected — real mouse interaction must not be
+  silently dropped.
 - `parseCombo` (manual entry) converts comma-separated keys + delays into
   keydowns (with inter-key delays), a delay before the keyups, reverse-order keyups,
   and a final rest delay.

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { useUndo } from "@/shared/use-undo"
-import { MAX_REPEAT, MIN_REPEAT } from "@/shared/defaults"
+import { deriveSkillRun } from "@/shared/run-validation"
 import type {
   RepeatMode,
   SkillConfig,
@@ -22,14 +22,6 @@ export function useSkillSettings(initial: SkillConfig) {
   const [labelStyle, setLabelStyle] = useState<StepLabelStyle>(initial.labelStyle)
   const [skillsRepeatMode, setSkillsRepeatMode] = useState<RepeatMode>(initial.repeatMode)
   const [skillsRepeatCount, setSkillsRepeatCount] = useState(initial.repeatCount)
-
-  const skillsRepeatError =
-    skillsRepeatMode === "count" &&
-    (skillsRepeatCount === "" || Number(skillsRepeatCount) < MIN_REPEAT)
-  const skillsCanRun =
-    skillsEnabled &&
-    skillSteps.some((s) => s.type === "keydown") &&
-    !skillsRepeatError
 
   const addSkillKeydown = useCallback(() => {
     setSkillSteps((prev) => [...prev, { id: crypto.randomUUID(), type: "keydown", key: "" }])
@@ -104,20 +96,12 @@ export function useSkillSettings(initial: SkillConfig) {
     [skillsEnabled, holdRightClick, skillSteps, labelStyle, skillsRepeatMode, skillsRepeatCount],
   )
 
-  const skillsConfig = useMemo(
-    () => ({
-      holdRightClick,
-      steps: skillSteps.map((s) => {
-        if (s.type === "delay") {
-          return { type: "delay" as const, ms: Math.max(0, Number(s.ms) || 0) }
-        }
-        return { type: s.type as "keydown" | "keyup", key: s.key.trim() }
-      }),
-      repeatMode: skillsRepeatMode,
-      repeatCount: Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(skillsRepeatCount) || MIN_REPEAT)),
-    }),
-    [holdRightClick, skillSteps, skillsRepeatMode, skillsRepeatCount],
-  )
+  // Can-run gating + backend config come from the shared derivation, so
+  // tabs-edited combos and file-loaded combos behave identically.
+  const derivation = useMemo(() => deriveSkillRun(persisted), [persisted])
+  const skillsRepeatError = derivation.repeatError
+  const skillsCanRun = derivation.canRun
+  const skillsConfig = derivation.config
 
   return {
     skillsEnabled, setSkillsEnabled,
