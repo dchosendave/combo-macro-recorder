@@ -24,7 +24,7 @@ flowchart LR
 | Combo files (open/save/new/auto-load) | `src/combo-file/` | `src-tauri/src/commands/files.rs` |
 | Global hotkey wiring | `src/hotkeys/use-global-hotkeys.ts` | `src-tauri/src/commands/hotkeys.rs` |
 | Start/stop + progress UI | `src/runner/use-macro-runner.ts` | `src-tauri/src/runner/` |
-| Recording | `src/recorder/use-recorder.ts` | `src-tauri/src/commands/recorder.rs` |
+| Recording | `src/recorder/` (`use-recorder.ts` + `events-to-steps.ts`) | `src-tauri/src/commands/recorder.rs` |
 | Compact overlay | `src/runner/use-compact-mode.ts` | — (window API) |
 
 All Tauri commands are registered in `src-tauri/src/lib.rs`.
@@ -105,7 +105,7 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 | `read_file` | `path` | `string` | Read combo JSON (`fs::read_to_string`) |
 | `read_jitbit_file` | `path` | `string` | Read `.mcr` text (UTF-8, UTF-16 BOM fallback) |
 | `list_combo_files` | `path` (dir) | `{name, path}[]` | List `.json` files in a directory, case-insensitive sorted (used by the Hotkeys tab file picker) |
-| `set_hotkeys` | `hotkeys: {shortcut, hotkeyId}[]` | `()` | Diff-register global shortcuts; unregisters removed ones |
+| `set_hotkeys` | `hotkeys: {shortcut, hotkeyId}[]` | `()` | Diff-register global shortcuts; unregisters removed ones. Transactional: a registration failure re-registers the removed keys (best-effort rollback) and returns Err without mutating state |
 | `start_recording` | — | `()` | Start the key-polling thread |
 | `stop_recording` | — | `{timestampMs, key, action}[]` | Stop polling, return recorded events |
 
@@ -164,7 +164,9 @@ Combos are versioned JSON files (open/save via the file dialogs):
 ```
 
 - `version: 2` files are accepted too; import **merges parsed values over defaults**, so
-  missing/unknown fields degrade gracefully. Older/unknown versions throw
+  missing/unknown fields degrade gracefully. Malformed `potions`/`skills` values
+  (string, number, `null`) also degrade to defaults via `asRecord` — they can never
+  crash or leak spread garbage. Older/unknown versions throw
   (`src/combo-file/combo-io.ts`).
 - `delayMs`, `repeatCount`, and step `ms` are strings in the file (input-friendly);
   the backend receives numbers via `toRunnerInputs`.
@@ -221,8 +223,10 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
   of which window has focus.
 - Modifier keys (Shift/Ctrl/Alt) are intentionally skipped (`should_track`).
 - Timestamps are milliseconds elapsed since recording start, assigned per poll batch.
-- `useRecorder` (`src/recorder/use-recorder.ts`) converts events into the step list,
-  inserting a `delay` step before each event.
+- `useRecorder` (`src/recorder/use-recorder.ts`) stops the recording and converts the
+  events into the step list; the conversion (`eventsToSteps` + the `RecordedEvent`
+  type) lives in `src/recorder/events-to-steps.ts` — a delay step is inserted before
+  each event whose timestamp delta is > 0.
 
 ## Jitbit import (`src/skills/parsers.ts`)
 
@@ -255,6 +259,39 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
   cleared) and parks in the chosen screen corner.
 - `auto` corner = the corner matching the window center relative to the work-area center.
 - On exit the previous size, position, and min-size constraints are restored.
+
+## Testing
+
+Frontend (`npm test`, vitest + jsdom + `@testing-library/react`): pure logic and
+hooks are unit-tested; tab components stay manual QA. Infrastructure:
+
+- `vitest.config.ts` — jsdom environment, `@/` alias, `src/test/setup.ts` as the
+  global setup file.
+- `src/test/setup.ts` — mocks `@tauri-apps/api/*`, `@tauri-apps/plugin-dialog`, and
+  `sonner` (the toast mock is callable), rebinds `localStorage` to the jsdom window
+  storage (Node ≥ 22's experimental global shadows it), clears storage + mocks + timers
+  between tests.
+- `src/test/tauri-utils.ts` — `invokeMock`/`listenMock`/`toastMock` accessors and
+  `fireTauriEvent(event, payload)`, which dispatches to the handler registered by
+  `listen` with the real `Event<T>` shape (`{ payload }`).
+- Hook suites must set `invokeMock.mockResolvedValue(undefined)` in `beforeEach`
+  (hooks chain `.catch` on `invoke` results) and wrap async flows in
+  `await act(async () => { ... })`.
+
+Contracts the suite pins (keep them green when refactoring):
+
+- `src/shared/run-validation.test.ts` — the can-run rules AND the exact
+  frontend→Rust wire shapes (`toRunnerInputs` JSON literals; the accept side is
+  pinned by Rust's `skill_step_deserializes_from_frontend_json`).
+- `src/hotkeys/use-global-hotkeys.test.ts` — the seq/last-press-wins race, the
+  combo cache, and the running-profile stop path of `useGlobalHotkeys`.
+- `src-tauri/src/commands/hotkeys.rs` — `diff_hotkeys`/`apply_hotkey_diff`
+  (rollback on register failure). OS-level `RegisterHotKey` integration is
+  deliberately untested (headless CI, hotkey collisions).
+- `src-tauri/src/runner/` — channel stop semantics (`stop_all` idempotent, no
+  activation events after stop), `KeyReleaseGuard` cleanup incl. panic unwinding,
+  `fallback_spin` timing. Recorder `poll_thread` (real `GetAsyncKeyState` input)
+  is not unit-testable — its pure helpers are.
 
 ## Windows / platform constraints
 

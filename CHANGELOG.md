@@ -6,7 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- Comprehensive automated test suite: frontend pure logic + all hooks (vitest + jsdom + `@testing-library/react`, 181 tests) and backend gaps (56 Rust tests, including the hotkey diff/rollback, channel stop semantics, and error paths).
+- CI workflow (`.github/workflows/test.yml`) running `npm test` + `cargo test` on `windows-latest` for every push/PR.
 - Document usage in the README (features, quick start, combo file format, troubleshooting).
+
+### Fixed
+
+- Combo file import degrading malformed `potions`/`skills` fields to defaults instead of leaking garbage or crashing.
+- `set_hotkeys` partially mutating registered shortcuts when a registration failed; it now re-registers removed keys (best-effort rollback) and returns the error without changing state.
 
 ## [1.0.7] - 2026-07-23
 
