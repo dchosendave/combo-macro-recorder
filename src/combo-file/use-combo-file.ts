@@ -119,17 +119,6 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
     }
   }, [saveToPath])
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault()
-        saveFile()
-      }
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [saveFile])
-
   const requestOpen = useCallback(() => {
     if (isDirty) {
       setPendingAction("open")
@@ -145,6 +134,25 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
     }
     doNew()
   }, [isDirty, doNew])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault()
+        saveFile()
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+        e.preventDefault()
+        requestNew()
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "o") {
+        e.preventDefault()
+        requestOpen()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [saveFile, requestNew, requestOpen])
 
   const confirmDiscard = useCallback(() => {
     const action = pendingAction

@@ -137,13 +137,16 @@ function App() {
   }, [settings, exitCompact, newCombo])
 
   const [activeTab, setActiveTab] = useState("combo")
+  const [innerTab, setInnerTab] = useState("potions")
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Tab") {
       e.preventDefault()
+      const ORDER = ["combo", "profiles"] as const
       setActiveTab((prev) => {
-        if (e.shiftKey) return prev === "combo" ? "profiles" : "combo"
-        return prev === "combo" ? "profiles" : "combo"
+        const idx = ORDER.indexOf(prev as (typeof ORDER)[number])
+        const dir = e.shiftKey ? -1 : 1
+        return ORDER[(idx + dir + ORDER.length) % ORDER.length]
       })
     }
   }, [])
@@ -172,6 +175,9 @@ function App() {
           fileName={currentFilePath}
           isDirty={isDirty}
           isProcessing={isProcessing}
+          canRun={settings.canRun}
+          compactMode={compactMode}
+          onToggleRunning={toggleRunning}
           onReset={handleReset}
           onOpen={requestOpen}
           onNew={requestNew}
@@ -186,7 +192,7 @@ function App() {
           </TabsList>
 
           <TabsContent value="combo" className="flex-1 min-h-0 flex flex-col animate-in fade-in-0 duration-200">
-            <Tabs defaultValue="potions" className="flex-1 min-h-0 flex flex-col">
+            <Tabs value={innerTab} onValueChange={setInnerTab} className="flex-1 min-h-0 flex flex-col">
               <TabsList variant="line" className="w-full h-7">
                 <TabsTrigger value="potions" className="text-xs px-2">Potions</TabsTrigger>
                 <TabsTrigger value="skills" className="text-xs px-2">Skills</TabsTrigger>

@@ -336,14 +336,14 @@ export function SkillsTab({
                           />
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <Label className="text-xs">Delays (comma-separated): between presses, before releases, rest</Label>
+                          <Label className="text-xs">Delays (comma-separated)</Label>
                           <Input
                             value={comboDelays}
                             onChange={(e) => setComboDelays(e.target.value)}
                             placeholder="85,45,60,150"
                           />
                           <p className="text-xs text-muted-foreground">
-                            Delays: between KeyDowns → before KeyUps → rest after cycle
+                            For 3 keys like "1,2,3", "85,45,60,150" means: 85ms after key 1, 45ms after key 2, 60ms before releasing, 150ms rest after the cycle.
                           </p>
                         </div>
                       </div>
@@ -530,6 +530,7 @@ export function SkillsTab({
                         onClick={() => {
                           if (locked) return
                           setSelectedId((prev) => (prev === step.id ? null : step.id))
+                          scrollRef.current?.focus()
                         }}
                         onDragOver={(e) => handleRowDragOver(e, step.id)}
                         onDrop={(e) => handleRowDrop(e, step.id)}

@@ -62,13 +62,23 @@ export function KeysTab({
             {POTION_KEYS.map((key) => (
               <div
                 key={key}
-                className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2 transition-colors cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => togglePotionKey(key)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    togglePotionKey(key)
+                  }
+                }}
+                className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2 transition-colors cursor-pointer hover:bg-muted/50"
               >
                 <span className="flex items-center gap-2 text-sm">
                   <Kbd>{key.toUpperCase()}</Kbd>
                 </span>
                 <Switch
                   checked={keys[key]}
+                  onClick={(e) => e.stopPropagation()}
                   onCheckedChange={() => togglePotionKey(key)}
                 />
               </div>

@@ -162,34 +162,3 @@
     transition-duration: 0.01ms !important;
   }
 }
-
-/* ── Micro-interactions ──────────────────────────────── */
-
-/* Subtle card hover lift */
-[data-slot="card"]:not(.no-hover):hover {
-  box-shadow: var(--tw-ring-offset-shadow, 0 0 transparent),
-    var(--tw-ring-shadow, 0 0 transparent),
-    0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: box-shadow 0.2s ease;
-}
-
-.dark [data-slot="card"]:not(.no-hover):hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-/* Quick press feedback for all clickable elements */
-[role="button"]:not(:disabled):active,
-button:not(:disabled):active,
-[data-slot="button"]:not(:disabled):active {
-  transform: scale(0.97);
-}
-
-/* Smoother switch toggle */
-[data-slot="switch"] {
-  transition: background-color 0.15s ease, transform 0.15s ease;
-}
-
-/* Smoother dialog open/close */
-[data-slot="dialog-content"] {
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}

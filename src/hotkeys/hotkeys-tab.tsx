@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip"
 import { codeToLabel } from "@/shared/keycodes"
+import { toast } from "sonner"
 import type { CompactCorner, HotkeyBinding } from "@/shared/types"
 
 type HotkeysTabProps = {
@@ -116,13 +117,19 @@ export function HotkeysTab({
       if (e.shiftKey) parts.push("Shift")
       if (e.metaKey) parts.push("Meta")
       parts.push(e.code)
-      onUpdateHotkey(capturingId, parts.join("+"))
+      const combo = parts.join("+")
+      const dup = hotkeys.find((h) => h.id !== capturingId && h.hotkey === combo)
+      if (dup) {
+        toast.error(`Hotkey already used by "${dup.name}"`)
+        return
+      }
+      onUpdateHotkey(capturingId, combo)
       setCapturingId(null)
     }
 
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [capturingId, onUpdateHotkey])
+  }, [capturingId, onUpdateHotkey, hotkeys])
 
   const handleBrowse = async (bindingId: string) => {
     const path = await open({
@@ -258,68 +265,80 @@ export function HotkeysTab({
               <div className="flex items-center gap-2 pl-0.5">
                 <FileJson className="size-3.5 shrink-0 text-muted-foreground" />
                 {comboFiles.length > 0 ? (
-                  <Select
-                    value={binding.comboPath ?? ""}
-                    onValueChange={(path) => path && onUpdatePath(binding.id, path)}
-                  >
-                    <SelectTrigger className="h-7 flex-1 text-xs min-w-0" onClick={(e) => e.stopPropagation()}>
-                      <SelectValue placeholder="Select a combo..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {comboFiles.map((file) => (
-                        <SelectItem key={file.path} value={file.path}>
-                          {file.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <>
+                    <Select
+                      value={binding.comboPath ?? ""}
+                      onValueChange={(path) => path && onUpdatePath(binding.id, path)}
+                    >
+                      <SelectTrigger className="h-7 flex-1 text-xs min-w-0" onClick={(e) => e.stopPropagation()}>
+                        <SelectValue placeholder="Select a combo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {comboFiles.map((file) => (
+                          <SelectItem key={file.path} value={file.path}>
+                            {file.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="size-6 shrink-0"
+                            aria-label="Browse for combo file"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleBrowse(binding.id)
+                            }}
+                          >
+                            <Plus className="size-3.5" />
+                          </Button>
+                        }
+                      />
+                      <TooltipContent>Browse...</TooltipContent>
+                    </Tooltip>
+                  </>
+                ) : binding.comboPath ? (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate block">
+                            {binding.comboPath}
+                          </span>
+                        }
+                      />
+                      <TooltipContent className="max-w-[400px] break-all">
+                        {binding.comboPath}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleBrowse(binding.id)
+                      }}
+                    >
+                      Change…
+                    </Button>
+                  </>
                 ) : (
-                  <button
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleBrowse(binding.id)
                     }}
-                    className="flex-1 text-left min-w-0"
                   >
-                    {binding.comboPath ? (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span className="text-xs text-muted-foreground truncate block">
-                              {binding.comboPath}
-                            </span>
-                          }
-                        />
-                        <TooltipContent className="max-w-[400px] break-all">
-                          {binding.comboPath}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <span className="text-xs text-muted-foreground/60 italic">
-                        No file selected
-                      </span>
-                    )}
-                  </button>
+                    Browse…
+                  </Button>
                 )}
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="size-6 shrink-0"
-                        aria-label="Browse for combo file"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleBrowse(binding.id)
-                        }}
-                      >
-                        <Plus className="size-3.5" />
-                      </Button>
-                    }
-                  />
-                  <TooltipContent>Browse...</TooltipContent>
-                </Tooltip>
               </div>
             </div>
           ))}

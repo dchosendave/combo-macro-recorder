@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes"
-import { FilePlus, FolderOpen, Moon, RotateCcw, Save, SaveAll, Sun } from "lucide-react"
+import { FilePlus, FolderOpen, Moon, Play, RotateCcw, Save, SaveAll, Square, Sun } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { Badge } from "@/shared/components/ui/badge"
 import {
@@ -26,6 +26,9 @@ type AppHeaderProps = {
   fileName: string | null
   isDirty: boolean
   isProcessing: boolean
+  canRun: boolean
+  compactMode: boolean
+  onToggleRunning: () => void
   onReset: () => void
   onOpen: () => void
   onNew: () => void
@@ -39,6 +42,9 @@ export function AppHeader({
   fileName,
   isDirty,
   isProcessing,
+  canRun,
+  compactMode,
+  onToggleRunning,
   onReset,
   onOpen,
   onNew,
@@ -51,7 +57,7 @@ export function AppHeader({
     <header className="flex items-center justify-between">
       <div className="flex items-center gap-2.5">
         <span className="font-heading text-base font-semibold">
-          Configuration
+          Combo
         </span>
         <span className="max-w-[180px] truncate text-xs text-muted-foreground">
           {fileName ? fileName.split(/[\\/]/).pop() : "Untitled"}
@@ -74,6 +80,22 @@ export function AppHeader({
         </Badge>
       </div>
       <div className="flex items-center gap-1">
+        {running && !compactMode ? (
+          <Button size="sm" variant="destructive" onClick={onToggleRunning}>
+            <Square className="size-4" />
+            Stop
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="default"
+            onClick={onToggleRunning}
+            disabled={!canRun || isProcessing}
+          >
+            <Play className="size-4" />
+            Run
+          </Button>
+        )}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -88,7 +110,7 @@ export function AppHeader({
               </Button>
             }
           />
-          <TooltipContent>New…</TooltipContent>
+          <TooltipContent>New (Ctrl+N)</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -104,7 +126,7 @@ export function AppHeader({
               </Button>
             }
           />
-          <TooltipContent>Open…</TooltipContent>
+          <TooltipContent>Open (Ctrl+O)</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -112,7 +134,7 @@ export function AppHeader({
               <Button
                 size="icon"
                 variant="ghost"
-                disabled={isProcessing}
+                disabled={isProcessing || !isDirty}
                 aria-label="Save"
                 onClick={onSave}
               >
@@ -120,7 +142,7 @@ export function AppHeader({
               </Button>
             }
           />
-          <TooltipContent>Save</TooltipContent>
+          <TooltipContent>Save (Ctrl+S)</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
