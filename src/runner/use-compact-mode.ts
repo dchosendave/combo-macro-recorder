@@ -1,15 +1,16 @@
 import { useCallback, useRef, useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import { currentMonitor, getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window"
 import { LogicalSize, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi"
 import { toast } from "sonner"
 import type { CompactCorner } from "@/shared/types"
 
-const COMPACT = new LogicalSize(500, 68)
+const COMPACT = new LogicalSize(500, 38)
 const MIN_CONSTRAINTS = { minWidth: 660, minHeight: 720 }
 const CORNER_KEY = "combo-macro-compact-corner"
 const MARGIN = 0
 
-/** Collapses the window to a 500x68 overlay parked in a screen corner while a combo runs, restoring size/position/min-size constraints on exit. `auto` corner picks the corner matching the window center relative to the work area. */
+/** Collapses the window to a 500x38 overlay (outer size — ~30px client area) parked in a screen corner while a combo runs, restoring size/position/min-size constraints on exit. `auto` corner picks the corner matching the window center relative to the work area. */
 export function useCompactMode() {
   const [compactMode, setCompactMode] = useState(false)
   const [savedSize, setSavedSize] = useState<LogicalSize | null>(null)
@@ -25,6 +26,7 @@ export function useCompactMode() {
 
   const savedPositionRef = useRef<PhysicalPosition | null>(null)
   const savedPhysSizeRef = useRef<PhysicalSize | null>(null)
+  const previousAlwaysOnTopRef = useRef(false)
 
   const setCompactCorner = useCallback((corner: CompactCorner) => {
     setCompactCornerState(corner)
@@ -45,6 +47,9 @@ export function useCompactMode() {
       await win.setResizable(true)
       await win.setSize(COMPACT)
       await win.setResizable(false)
+
+      previousAlwaysOnTopRef.current = await win.isAlwaysOnTop()
+      await win.setAlwaysOnTop(true)
 
       const monitor = await currentMonitor()
       if (monitor) {
@@ -104,6 +109,10 @@ export function useCompactMode() {
         await win.setPosition(new LogicalPosition(x, y))
       }
 
+      // Square corners for the bar (Win11 DWM rounds undecorated windows by
+      // default). Cosmetic — never fail compact mode over it.
+      invoke("set_hard_corners", { enabled: true }).catch(() => {})
+
       setCompactMode(true)
     } catch (e) {
       toast.error(`Compact mode failed: ${e}`)
@@ -114,6 +123,10 @@ export function useCompactMode() {
     if (!compactModeRef.current) return
     try {
       const win = getCurrentWindow()
+
+      // Restore the system default corner rounding.
+      invoke("set_hard_corners", { enabled: false }).catch(() => {})
+
       const savedPos = savedPositionRef.current
       if (savedPos) {
         await win.setPosition(savedPos)
@@ -121,6 +134,7 @@ export function useCompactMode() {
       await win.setSize(savedSize ?? new LogicalSize(660, 720))
       await win.setResizable(true)
       await win.setSizeConstraints(MIN_CONSTRAINTS)
+      await win.setAlwaysOnTop(previousAlwaysOnTopRef.current)
     } catch (e) {
       toast.error(`Restore mode failed: ${e}`)
     }

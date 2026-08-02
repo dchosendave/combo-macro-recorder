@@ -108,6 +108,7 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 | `set_hotkeys` | `hotkeys: {shortcut, hotkeyId}[]` | `()` | Diff-register global shortcuts; unregisters removed ones. Transactional: a registration failure re-registers the removed keys (best-effort rollback) and returns Err without mutating state |
 | `start_recording` | — | `()` | Start the key-polling thread |
 | `stop_recording` | — | `{timestampMs, key, action}[]` | Stop polling, return recorded events |
+| `set_hard_corners` | `enabled: bool` | `()` | Toggle Windows 11 DWM corner rounding on the calling window (`true` = square). No-op off-Windows; used by compact mode |
 
 `PotionConfig`/`SkillConfig` are the backend shapes (`src-tauri/src/runner/potions.rs`,
 `skills.rs`); the frontend builds them with `toRunnerInputs` (`src/runner/runner-inputs.ts`).
@@ -255,10 +256,13 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
 
 ## Compact mode (`src/runner/use-compact-mode.ts`)
 
-- While a combo runs, the window resizes to 500×68 logical px (min-size constraints
-  cleared) and parks in the chosen screen corner.
+- While a combo runs, the window resizes to 500×38 logical px outer size (~30px
+  client area; min-size constraints cleared) and parks in the chosen screen corner.
 - `auto` corner = the corner matching the window center relative to the work-area center.
 - On exit the previous size, position, and min-size constraints are restored.
+- Entering compact mode calls `set_hard_corners(true)` (square corners for the
+  bar — Win11 DWM rounds undecorated windows by default); exiting restores the
+  system default rounding. Both are fire-and-forget: cosmetic only.
 
 ## Testing
 

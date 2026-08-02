@@ -11,6 +11,8 @@ const winStub = {
   setResizable: vi.fn().mockResolvedValue(undefined),
   setSize: vi.fn().mockResolvedValue(undefined),
   setPosition: vi.fn().mockResolvedValue(undefined),
+  isAlwaysOnTop: vi.fn().mockResolvedValue(false),
+  setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
 }
 
 describe("useCompactMode", () => {
@@ -32,13 +34,15 @@ describe("useCompactMode", () => {
 
     expect(result.current.compactMode).toBe(true)
     expect(winStub.setSizeConstraints).toHaveBeenCalledWith(null)
-    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(500, 68))
+    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(500, 38))
     // setResizable(false) must come after setSize (its second invocation follows the size call)
     const setSizeOrder = winStub.setSize.mock.invocationCallOrder[0]
     const setResizableFalseOrder = winStub.setResizable.mock.invocationCallOrder[1]
     expect(setResizableFalseOrder).toBeGreaterThan(setSizeOrder)
     // window center (700, 600) is left and below work-area center (960, 540) -> bottom-left corner
-    expect(winStub.setPosition).toHaveBeenCalledWith(new LogicalPosition(0, 1012))
+    expect(winStub.setPosition).toHaveBeenCalledWith(new LogicalPosition(0, 1042))
+    expect(winStub.isAlwaysOnTop).toHaveBeenCalledTimes(1)
+    expect(winStub.setAlwaysOnTop).toHaveBeenCalledWith(true)
   })
 
   it("exitCompact restores saved position, size, resizable and min constraints", async () => {
@@ -60,6 +64,25 @@ describe("useCompactMode", () => {
     expect(winStub.setSize).toHaveBeenLastCalledWith(new LogicalSize(current))
     expect(winStub.setResizable).toHaveBeenLastCalledWith(true)
     expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 660, minHeight: 720 })
+    expect(winStub.setAlwaysOnTop).toHaveBeenCalledWith(false)
+  })
+
+  it("compact mode restores a prior always-on-top state", async () => {
+    vi.mocked(winStub.isAlwaysOnTop).mockResolvedValue(true)
+    const { result } = renderHook(() => useCompactMode())
+
+    await act(async () => {
+      await result.current.enterCompact()
+    })
+    expect(winStub.setAlwaysOnTop).toHaveBeenCalledWith(true)
+
+    await act(async () => {
+      await result.current.exitCompact()
+    })
+
+    expect(result.current.compactMode).toBe(false)
+    // prior state was on-top -> restored to on-top
+    expect(winStub.setAlwaysOnTop).toHaveBeenLastCalledWith(true)
   })
 
   it("setCompactCorner persists to localStorage", () => {
@@ -104,6 +127,8 @@ describe("useCompactMode", () => {
     expect(winStub.setResizable).not.toHaveBeenCalled()
     expect(winStub.setSize).not.toHaveBeenCalled()
     expect(winStub.setPosition).not.toHaveBeenCalled()
+    expect(winStub.isAlwaysOnTop).not.toHaveBeenCalled()
+    expect(winStub.setAlwaysOnTop).not.toHaveBeenCalled()
     expect(vi.mocked(getCurrentWindow)).not.toHaveBeenCalled()
   })
 })
