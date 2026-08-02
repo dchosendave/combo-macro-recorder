@@ -254,8 +254,52 @@ mod tests {
     }
 
     #[test]
+    fn vk_to_readable_and_should_track_boundaries() {
+        // Tracked range boundaries: PageUp..Down (0x21..=0x28), Insert/Delete,
+        // numpad digits, F1..F20, and the punctuation block 0xBA..=0xDE.
+        for vk in 0x21..=0x28 {
+            assert!(should_track(vk), "0x{vk:X} (PageUp..Down) must be tracked");
+        }
+        for vk in [0x2D, 0x2E, 0x60, 0x69, 0x70, 0x83, 0xBA, 0xBF, 0xC0, 0xDB, 0xDE] {
+            assert!(should_track(vk), "0x{vk:X} must be tracked");
+        }
+        // Just outside the tracked ranges.
+        for vk in [0x1C, 0x2F, 0x5B, 0x84, 0x85] {
+            assert!(!should_track(vk), "0x{vk:X} must NOT be tracked");
+        }
+
+        // Punctuation block 0xBA..=0xDE.
+        assert_eq!(vk_to_readable(0xBA), ";");
+        assert_eq!(vk_to_readable(0xBB), "=");
+        assert_eq!(vk_to_readable(0xBC), ",");
+        assert_eq!(vk_to_readable(0xBD), "-");
+        assert_eq!(vk_to_readable(0xBE), ".");
+        assert_eq!(vk_to_readable(0xBF), "/");
+        assert_eq!(vk_to_readable(0xC0), "`");
+        assert_eq!(vk_to_readable(0xDB), "[");
+        assert_eq!(vk_to_readable(0xDC), "\\");
+        assert_eq!(vk_to_readable(0xDD), "]");
+        assert_eq!(vk_to_readable(0xDE), "'");
+
+        // Numpad / F-key endpoints.
+        assert_eq!(vk_to_readable(0x60), "Num0");
+        assert_eq!(vk_to_readable(0x69), "Num9");
+        assert_eq!(vk_to_readable(0x7A), "F11");
+        assert_eq!(vk_to_readable(0x83), "F20");
+
+        // Unknown codes fall back to VK_<code>.
+        assert_eq!(vk_to_readable(0x85), "VK_133");
+        assert_eq!(vk_to_readable(-1), "VK_-1");
+    }
+
+    #[test]
     fn recording_lifecycle_starts_once_and_stops_with_events() {
         // The RECORDING static is per test binary; no other test touches it.
+        assert!(
+            stop_recording().is_err(),
+            "stop while inactive must error"
+        );
+
         start_recording().expect("recording should start");
         assert!(start_recording().is_err(), "double-start must error");
 

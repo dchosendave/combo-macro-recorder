@@ -6,6 +6,11 @@ export function exportComboToString(current: CurrentCombo): string {
   return JSON.stringify({ version: 3, potions: current.potions, skills: current.skills }, null, 2)
 }
 
+/** Coerces an unknown value to a plain record so malformed combo fields degrade to defaults. */
+function asRecord(v: unknown): Record<string, unknown> {
+  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {}
+}
+
 /** Parse a combo file. Accepts v2/v3; parsed values are merged over defaults, so missing fields degrade gracefully. Throws on invalid JSON or unknown versions. */
 export function importComboFromString(json: string): CurrentCombo {
   let parsed: unknown
@@ -17,35 +22,25 @@ export function importComboFromString(json: string): CurrentCombo {
 
   // V3 combo format
   if (p.version === 3) {
+    const potions = asRecord(p.potions)
+    const skills = asRecord(p.skills)
     return {
-      potions: {
-        ...defaultPotionConfig(),
-        ...(p.potions as Record<string, unknown> ?? {}),
-        keys: { ...defaultPotionConfig().keys, ...((p.potions as Record<string, unknown>)?.keys as Record<string, boolean> ?? {}) },
-      },
-      skills: {
-        ...defaultSkillConfig(),
-        ...(p.skills as Record<string, unknown> ?? {}),
-        steps: Array.isArray((p.skills as Record<string, unknown>)?.steps) ? (p.skills as Record<string, unknown>).steps as SkillStep[] : [],
-      },
+      potions: { ...defaultPotionConfig(), ...potions,
+                 keys: { ...defaultPotionConfig().keys, ...asRecord(potions.keys) } },
+      skills: { ...defaultSkillConfig(), ...skills,
+                steps: Array.isArray(skills.steps) ? (skills.steps as SkillStep[]) : [] },
     }
   }
 
   // V2 format
   if (p.version === 2) {
-    const potions = p.potions as Record<string, unknown> | undefined
-    const skills = p.skills as Record<string, unknown> | undefined
+    const potions = asRecord(p.potions)
+    const skills = asRecord(p.skills)
     return {
-      potions: {
-        ...defaultPotionConfig(),
-        ...(potions ?? {}),
-        keys: { ...defaultPotionConfig().keys, ...((potions?.keys as Record<string, boolean>) ?? {}) },
-      },
-      skills: {
-        ...defaultSkillConfig(),
-        ...(skills ?? {}),
-        steps: Array.isArray(skills?.steps) ? skills!.steps as SkillStep[] : [],
-      },
+      potions: { ...defaultPotionConfig(), ...potions,
+                 keys: { ...defaultPotionConfig().keys, ...asRecord(potions.keys) } },
+      skills: { ...defaultSkillConfig(), ...skills,
+                steps: Array.isArray(skills.steps) ? (skills.steps as SkillStep[]) : [] },
     }
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseJitbit, parseJitbitFile } from "./parsers"
+import { parseCombo, parseJitbit, parseJitbitFile } from "./parsers"
 import type { SkillStep } from "@/shared/types"
 
 function stripId(steps: SkillStep[]) {
@@ -216,5 +216,51 @@ describe("parseJitbit edge cases", () => {
     const result = parseJitbit("keyboard : d0 : keydown\nkeyboard : d9 : keyup")
     expect(result[0]).toMatchObject({ type: "keydown", key: "0" })
     expect(result[1]).toMatchObject({ type: "keyup", key: "9" })
+  })
+})
+
+describe("parseCombo", () => {
+  it("builds keydowns with inter-key delays, reverse-order keyups, and the pre-keyup delay", () => {
+    expect(stripId(parseCombo("1,2", "85,45"))).toEqual([
+      { type: "keydown", key: "1" },
+      { type: "delay", ms: "85" },
+      { type: "keydown", key: "2" },
+      { type: "delay", ms: "45" },
+      { type: "keyup", key: "2" },
+      { type: "keyup", key: "1" },
+    ])
+  })
+
+  it("uses the third delay as the final rest delay", () => {
+    expect(stripId(parseCombo("1", "85,100"))).toEqual([
+      { type: "keydown", key: "1" },
+      { type: "delay", ms: "85" },
+      { type: "keyup", key: "1" },
+      { type: "delay", ms: "100" },
+    ])
+  })
+
+  it("omits missing middle and rest delays", () => {
+    expect(stripId(parseCombo("1,2", "85"))).toEqual([
+      { type: "keydown", key: "1" },
+      { type: "delay", ms: "85" },
+      { type: "keydown", key: "2" },
+      { type: "keyup", key: "2" },
+      { type: "keyup", key: "1" },
+    ])
+  })
+
+  it("returns no steps for empty input", () => {
+    expect(parseCombo("", "")).toEqual([])
+  })
+
+  it("trims whitespace around keys", () => {
+    expect(stripId(parseCombo(" a , b ", "10"))).toEqual([
+      { type: "keydown", key: "a" },
+      { type: "delay", ms: "10" },
+      { type: "keydown", key: "b" },
+      { type: "keyup", key: "b" },
+      { type: "keyup", key: "a" },
+    ])
   })
 })

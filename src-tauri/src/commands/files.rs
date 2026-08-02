@@ -160,4 +160,71 @@ mod tests {
         let entries = list_combo_files(dir.path().to_string_lossy().into_owned()).unwrap();
         assert!(entries.is_empty());
     }
+
+    #[test]
+    fn read_jitbit_file_missing_file_errors() {
+        let err = read_jitbit_file("Z:\\definitely\\not\\here.mcr".into()).unwrap_err();
+        assert!(!err.is_empty());
+    }
+
+    #[test]
+    fn read_jitbit_file_decodes_utf16_be_bom() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("combo.mcr").to_string_lossy().into_owned();
+
+        let mut bytes = vec![0xFE, 0xFF];
+        for unit in "DELAY : 50\n".encode_utf16() {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        std::fs::write(&path, &bytes).unwrap();
+        assert_eq!(read_jitbit_file(path).unwrap(), "DELAY : 50\n");
+    }
+
+    #[test]
+    fn save_file_to_nonexistent_parent_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir
+            .path()
+            .join("no-such-subdir")
+            .join("combo.json")
+            .to_string_lossy()
+            .into_owned();
+        assert!(save_file(path, "{}".into()).is_err());
+    }
+
+    #[test]
+    fn read_and_save_on_directory_paths_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().into_owned();
+
+        assert!(read_file(dir_path.clone()).is_err(), "reading a directory must fail");
+        assert!(save_file(dir_path, "{}".into()).is_err(), "writing over a directory must fail");
+    }
+
+    #[test]
+    fn list_combo_files_on_a_file_path_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("combo.json").to_string_lossy().into_owned();
+        std::fs::write(&file_path, "{}").unwrap();
+
+        assert!(list_combo_files(file_path).is_err());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn list_combo_files_skips_non_utf8_filenames() {
+        use std::os::windows::ffi::OsStringExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        // A lone UTF-16 surrogate makes the name non-UTF-8; it must be skipped
+        // without panicking.
+        let weird: std::ffi::OsString =
+            std::ffi::OsString::from_wide(&[0x0063, 0x006F, 0x006D, 0x0062, 0x006F, 0xD800, 0x002E, 0x006A, 0x0073, 0x006F, 0x006E]); // "combo\u{D800}.json"
+        std::fs::write(dir.path().join(weird), "{}").unwrap();
+        std::fs::write(dir.path().join("good.json"), "{}").unwrap();
+
+        let entries = list_combo_files(dir.path().to_string_lossy().into_owned()).unwrap();
+        let names: Vec<_> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["good.json"]);
+    }
 }

@@ -158,6 +158,7 @@ impl KeyInjector for EnigoInjector {
 
 #[cfg(test)]
 mod tests {
+    use super::test_utils::{InjectedEvent, MockInjector};
     use super::*;
 
     #[test]
@@ -210,6 +211,38 @@ mod tests {
         assert_eq!(parse_key("F25"), None);
         assert_eq!(parse_key("Num10"), None);
         assert_eq!(parse_key("Shift"), None, "modifiers are intentionally unsupported");
+    }
+
+    #[test]
+    fn key_release_guard_drop_releases_right_click_then_keys() {
+        let mut injector = MockInjector::default();
+        {
+            let _guard =
+                KeyReleaseGuard::new(&mut injector, vec![Key::Unicode('a'), Key::Space], true);
+        }
+        assert_eq!(
+            injector.log().lock().clone(),
+            vec![
+                InjectedEvent::ReleaseRightClick,
+                InjectedEvent::Release(Key::Unicode('a')),
+                InjectedEvent::Release(Key::Space),
+            ]
+        );
+    }
+
+    #[test]
+    fn key_release_guard_releases_keys_on_panic() {
+        let mut injector = MockInjector::default();
+        let log = injector.log();
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = KeyReleaseGuard::new(&mut injector, vec![Key::Unicode('q')], false);
+            panic!("boom");
+        }));
+
+        assert!(result.is_err(), "the inner panic must propagate");
+        // Drop ran during unwind, releasing the held key.
+        assert_eq!(log.lock().clone(), vec![InjectedEvent::Release(Key::Unicode('q'))]);
     }
 }
 

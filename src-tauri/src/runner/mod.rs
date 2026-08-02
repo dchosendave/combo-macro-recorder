@@ -109,7 +109,7 @@ mod tests {
     use enigo::Key;
     use potions::PotionConfig;
     use skills::{SkillConfig, SkillStep};
-    use tauri::Manager;
+    use tauri::{Listener, Manager};
 
     const POTION_CHARS: [char; 4] = ['q', 'w', 'e', 'r'];
 
@@ -279,5 +279,79 @@ mod tests {
         let state = app.state::<AppState>();
         assert!(!state.potions.running.load(Ordering::SeqCst));
         assert!(!state.skills.running.load(Ordering::SeqCst));
+        // The join consumed both thread handles — no leaked threads.
+        assert!(state.potions.handle.lock().is_none());
+        assert!(state.skills.handle.lock().is_none());
+    }
+
+    #[test]
+    fn stop_all_is_idempotent() {
+        let mut state = AppState::default();
+        let _log = mock_app_with_factory(&mut state);
+
+        let app = build_app(state);
+        let handle = app.handle().clone();
+
+        start_combo_inner(
+            Some(PotionConfig::for_test(true, true, true, true, 100, "loop", 1)),
+            Some(skill_config(false, "loop", 1)),
+            &handle,
+            &app.state::<AppState>(),
+        );
+
+        stop_all_inner(&app.state::<AppState>());
+        stop_all_inner(&app.state::<AppState>());
+
+        let state = app.state::<AppState>();
+        assert!(!state.potions.running.load(Ordering::SeqCst));
+        assert!(!state.skills.running.load(Ordering::SeqCst));
+        assert!(state.potions.handle.lock().is_none());
+        assert!(state.skills.handle.lock().is_none());
+    }
+
+    #[test]
+    fn no_activation_events_after_stop() {
+        use std::sync::atomic::AtomicUsize;
+
+        let mut state = AppState::default();
+        let _log = mock_app_with_factory(&mut state);
+
+        let app = build_app(state);
+        let handle = app.handle().clone();
+
+        let count = Arc::new(AtomicUsize::new(0));
+        let count_clone = count.clone();
+        let _unlisten = handle.listen("macro-activation", move |_| {
+            count_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        // Zero delay → cycles run at full speed; the first activation (cycle 10)
+        // arrives in microseconds.
+        start_combo_inner(
+            Some(PotionConfig::for_test(true, true, true, true, 0, "loop", 1)),
+            None,
+            &handle,
+            &app.state::<AppState>(),
+        );
+
+        let start = Instant::now();
+        while count.load(Ordering::SeqCst) == 0 {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "timed out waiting for the first activation"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        stop_all_inner(&app.state::<AppState>());
+
+        // The channel thread is joined by stop — nothing can emit afterwards.
+        let after_stop = count.load(Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            after_stop,
+            "no activation events may be emitted after stop_all"
+        );
     }
 }

@@ -1,0 +1,280 @@
+import { act, renderHook } from "@testing-library/react"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { open, save } from "@tauri-apps/plugin-dialog"
+import { invokeMock, toastMock } from "@/test/tauri-utils"
+import { exportComboToString } from "@/combo-file/combo-io"
+import { defaultPotionConfig, defaultSkillConfig } from "@/shared/defaults"
+import type { CurrentCombo } from "@/shared/types"
+import { useComboFile } from "@/combo-file/use-combo-file"
+
+const LAST_PATH_KEY = "combo-macro-last-path"
+const AUTO_LOAD_KEY = "combo-macro-auto-load"
+const PATH = "C:\\combos\\a.json"
+
+const openMock = vi.mocked(open)
+const saveMock = vi.mocked(save)
+
+const OPENED_CONTENT = exportComboToString({
+  potions: { ...defaultPotionConfig(), customDelay: true, delayMs: "150" },
+  skills: defaultSkillConfig(),
+})
+
+function setup() {
+  const combo: CurrentCombo = { potions: defaultPotionConfig(), skills: defaultSkillConfig() }
+  const applyCombo = vi.fn()
+  const onSave = vi.fn()
+  const makeProps = () => ({ getCombo: () => combo, applyCombo, onSave })
+  const hook = renderHook((props: Parameters<typeof useComboFile>[0]) => useComboFile(props), {
+    initialProps: makeProps(),
+  })
+  // A fresh props object gives `getCombo` a new identity so the isDirty memo recomputes.
+  const rerender = () => hook.rerender(makeProps())
+  return { combo, applyCombo, onSave, hook, rerender }
+}
+
+beforeEach(() => {
+  invokeMock.mockResolvedValue(undefined)
+})
+
+describe("useComboFile", () => {
+  it("tracks dirtiness against a baseline and clears it on save", async () => {
+    const { combo, applyCombo, onSave, hook, rerender } = setup()
+    expect(hook.result.current.isDirty).toBe(false)
+
+    combo.potions.delayMs = "200"
+    rerender()
+    expect(hook.result.current.isDirty).toBe(true)
+
+    saveMock.mockResolvedValue(PATH)
+    await act(async () => {
+      await hook.result.current.saveFile()
+    })
+
+    expect(saveMock).toHaveBeenCalledWith({
+      defaultPath: "combo.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    })
+    expect(invokeMock).toHaveBeenCalledWith("save_file", {
+      path: PATH,
+      content: exportComboToString(combo),
+    })
+    expect(onSave).toHaveBeenCalledWith(PATH)
+    expect(hook.result.current.isDirty).toBe(false)
+
+    // Baseline is the saved string: the same content is not dirty on re-render.
+    rerender()
+    expect(hook.result.current.isDirty).toBe(false)
+    expect(applyCombo).not.toHaveBeenCalled()
+  })
+
+  it("requestOpen while dirty defers the dialog until discard is confirmed or cancelled", () => {
+    const { combo, hook, rerender } = setup()
+    combo.potions.delayMs = "200"
+    rerender()
+
+    act(() => {
+      hook.result.current.requestOpen()
+    })
+    expect(hook.result.current.pendingAction).toBe("open")
+    expect(openMock).not.toHaveBeenCalled()
+
+    act(() => {
+      hook.result.current.cancelDiscard()
+    })
+    expect(hook.result.current.pendingAction).toBeNull()
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
+  it("confirmDiscard after a dirty requestOpen proceeds with the dialog and loads the file", async () => {
+    const { combo, applyCombo, hook, rerender } = setup()
+    combo.potions.delayMs = "200"
+    rerender()
+
+    act(() => {
+      hook.result.current.requestOpen()
+    })
+    openMock.mockResolvedValue(PATH)
+    invokeMock.mockResolvedValueOnce(OPENED_CONTENT)
+
+    await act(async () => {
+      hook.result.current.confirmDiscard()
+    })
+
+    expect(openMock).toHaveBeenCalledWith({
+      filters: [{ name: "JSON", extensions: ["json"] }],
+      multiple: false,
+    })
+    expect(applyCombo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        potions: expect.objectContaining({ customDelay: true, delayMs: "150" }),
+      }),
+    )
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+    expect(hook.result.current.pendingAction).toBeNull()
+    expect(hook.result.current.isProcessing).toBe(false)
+    expect(localStorage.getItem(LAST_PATH_KEY)).toBe(PATH)
+    expect(toastMock.success).toHaveBeenCalledWith("Opened a.json")
+  })
+
+  it("requestOpen while clean opens the dialog immediately and applies the loaded combo", async () => {
+    const { applyCombo, hook } = setup()
+    openMock.mockResolvedValue(PATH)
+    invokeMock.mockResolvedValueOnce(OPENED_CONTENT)
+
+    await act(async () => {
+      hook.result.current.requestOpen()
+    })
+
+    expect(openMock).toHaveBeenCalledWith({
+      filters: [{ name: "JSON", extensions: ["json"] }],
+      multiple: false,
+    })
+    expect(invokeMock).toHaveBeenCalledWith("read_file", { path: PATH })
+    expect(applyCombo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        potions: expect.objectContaining({ customDelay: true, delayMs: "150" }),
+      }),
+    )
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+    expect(localStorage.getItem(LAST_PATH_KEY)).toBe(PATH)
+  })
+
+  it("cancelling the open dialog does not read a file and resets processing", async () => {
+    const { applyCombo, hook } = setup()
+    openMock.mockResolvedValue(null)
+
+    await act(async () => {
+      hook.result.current.requestOpen()
+    })
+
+    expect(openMock).toHaveBeenCalled()
+    expect(invokeMock).not.toHaveBeenCalled()
+    expect(applyCombo).not.toHaveBeenCalled()
+    expect(hook.result.current.isProcessing).toBe(false)
+    expect(hook.result.current.currentFilePath).toBeNull()
+  })
+
+  it("a read failure toasts an error and resets processing", async () => {
+    const { applyCombo, hook } = setup()
+    openMock.mockResolvedValue(PATH)
+    invokeMock.mockRejectedValueOnce(new Error("boom"))
+
+    await act(async () => {
+      hook.result.current.requestOpen()
+    })
+
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("Open failed"))
+    expect(applyCombo).not.toHaveBeenCalled()
+    expect(hook.result.current.isProcessing).toBe(false)
+    expect(hook.result.current.currentFilePath).toBeNull()
+  })
+
+  it("Ctrl+S saves to the current path when one is set", async () => {
+    const { combo, onSave, hook } = setup()
+    openMock.mockResolvedValue(PATH)
+    invokeMock.mockResolvedValueOnce(OPENED_CONTENT)
+    await act(async () => {
+      await hook.result.current.openFile()
+    })
+    invokeMock.mockClear()
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }))
+    })
+
+    expect(saveMock).not.toHaveBeenCalled()
+    expect(invokeMock).toHaveBeenCalledWith("save_file", {
+      path: PATH,
+      content: exportComboToString(combo),
+    })
+    expect(onSave).toHaveBeenCalledWith(PATH)
+    expect(toastMock.success).toHaveBeenCalledWith("Saved")
+  })
+
+  it("Ctrl+S without a current path shows the save dialog", async () => {
+    const { combo } = setup()
+    saveMock.mockResolvedValue(PATH)
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }))
+    })
+
+    expect(saveMock).toHaveBeenCalledWith({
+      defaultPath: "combo.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    })
+    expect(invokeMock).toHaveBeenCalledWith("save_file", {
+      path: PATH,
+      content: exportComboToString(combo),
+    })
+  })
+
+  it("Meta+S also triggers a save (the guard accepts ctrlKey or metaKey)", async () => {
+    setup()
+    saveMock.mockResolvedValue(PATH)
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", metaKey: true }))
+    })
+
+    expect(saveMock).toHaveBeenCalled()
+  })
+
+  it("a plain s keydown without a modifier does not trigger a save", async () => {
+    setup()
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "s" }))
+    })
+
+    expect(saveMock).not.toHaveBeenCalled()
+    expect(invokeMock).not.toHaveBeenCalled()
+  })
+
+  it("tryAutoLoad loads the last path when auto-load is enabled", async () => {
+    const { applyCombo, hook } = setup()
+    localStorage.setItem(LAST_PATH_KEY, PATH)
+    invokeMock.mockResolvedValueOnce(OPENED_CONTENT)
+
+    let loaded = false
+    await act(async () => {
+      loaded = await hook.result.current.tryAutoLoad()
+    })
+
+    expect(loaded).toBe(true)
+    expect(invokeMock).toHaveBeenCalledWith("read_file", { path: PATH })
+    expect(applyCombo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        potions: expect.objectContaining({ customDelay: true, delayMs: "150" }),
+      }),
+    )
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+  })
+
+  it("tryAutoLoad skips loading when auto-load is disabled", async () => {
+    const { applyCombo, hook } = setup()
+    localStorage.setItem(LAST_PATH_KEY, PATH)
+    localStorage.setItem(AUTO_LOAD_KEY, "false")
+
+    let loaded = true
+    await act(async () => {
+      loaded = await hook.result.current.tryAutoLoad()
+    })
+
+    expect(loaded).toBe(false)
+    expect(invokeMock).not.toHaveBeenCalled()
+    expect(applyCombo).not.toHaveBeenCalled()
+  })
+
+  it("tryAutoLoad returns false when no last path is stored", async () => {
+    const { hook } = setup()
+
+    let loaded = true
+    await act(async () => {
+      loaded = await hook.result.current.tryAutoLoad()
+    })
+
+    expect(loaded).toBe(false)
+    expect(invokeMock).not.toHaveBeenCalled()
+  })
+})

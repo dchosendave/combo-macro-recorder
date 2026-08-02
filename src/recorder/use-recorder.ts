@@ -1,36 +1,8 @@
 import { useCallback, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { toast } from "sonner"
+import { eventsToSteps, type RecordedEvent } from "./events-to-steps"
 import type { SkillStep } from "@/shared/types"
-
-type RecordedEvent = {
-  timestampMs: number
-  key: string
-  action: "keydown" | "keyup"
-}
-
-function eventsToSteps(events: RecordedEvent[]): SkillStep[] {
-  const steps: SkillStep[] = []
-
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i]
-
-    if (i > 0) {
-      const delay = event.timestampMs - events[i - 1].timestampMs
-      if (delay > 0) {
-        steps.push({ id: crypto.randomUUID(), type: "delay", ms: String(delay) })
-      }
-    }
-
-    steps.push({
-      id: crypto.randomUUID(),
-      type: event.action,
-      key: event.key,
-    })
-  }
-
-  return steps
-}
 
 /** Records real keystrokes system-wide via the backend polling thread and converts them into skill steps (delay + keydown/keyup). */
 export function useRecorder() {

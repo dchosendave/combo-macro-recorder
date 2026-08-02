@@ -155,4 +155,33 @@ mod tests {
             "cancelled sleep must not wait out the full duration"
         );
     }
+
+    #[test]
+    fn fallback_spin_sleeps_approximately_the_requested_duration() {
+        let running = Arc::new(AtomicBool::new(true));
+        let start = Instant::now();
+        fallback_spin(80, &running);
+        let elapsed = start.elapsed();
+        // ±40% tolerance, mirroring the style of the sleep_precise test above.
+        assert!(elapsed >= Duration::from_millis(48), "returned too early: {elapsed:?}");
+        assert!(elapsed <= Duration::from_millis(500), "slept {elapsed:?}, way too long");
+    }
+
+    #[test]
+    fn fallback_spin_returns_promptly_when_cancelled() {
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = running.clone();
+
+        let start = Instant::now();
+        let handle = std::thread::spawn(move || fallback_spin(1000, &running_clone));
+
+        std::thread::sleep(Duration::from_millis(5));
+        running.store(false, Ordering::SeqCst);
+        handle.join().unwrap();
+
+        assert!(
+            start.elapsed() < Duration::from_millis(100),
+            "cancelled spin must return well before the full duration"
+        );
+    }
 }
