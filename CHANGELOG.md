@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- New Settings page (sidebar item): Always on top, auto-load on startup, combo files directory, and compact-overlay corner moved out of the Hotkeys tab, which now only manages hotkey bindings.
+- The current file name in the top bar is now a dropdown listing every `.json` combo in the combo directory (the one configured in the Hotkeys tab); picking one opens it through the normal unsaved-changes flow.
+- Left sidebar navigation (collapsible icon rail, Ctrl+B, persisted): Combo with Potions/Skills sub-items and Hotkeys replace the stacked tab bars; the top bar now holds only contextual actions.
 - Window now opens at a 16:9 default sized to ~2/3 of the screen's work-area width (1280x720 on a 1080p monitor), scaling up proportionally on larger screens.
 - Recent Combos dropdown (History button in the header) listing the last 8 opened/saved combo files, with click-to-reopen through the normal unsaved-changes flow and stale entries dropped on failed reads.
 - Comprehensive automated test suite: frontend pure logic + all hooks (vitest + jsdom + `@testing-library/react`, 181 tests) and backend gaps (56 Rust tests, including the hotkey diff/rollback, channel stop semantics, and error paths).

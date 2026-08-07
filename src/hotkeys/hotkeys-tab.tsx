@@ -1,14 +1,9 @@
 import { useState, useEffect } from "react"
-import { getCurrentWindow } from "@tauri-apps/api/window"
 import { open } from "@tauri-apps/plugin-dialog"
-import { invoke } from "@tauri-apps/api/core"
-import { ArrowUp, ArrowDown, FileJson, FolderOpen, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react"
-import { Switch } from "@/shared/components/ui/switch"
-import { Label } from "@/shared/components/ui/label"
+import { ArrowUp, ArrowDown, FileJson, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { Kbd } from "@/shared/components/ui/kbd"
 import { Card, CardContent } from "@/shared/components/ui/card"
-import { Separator } from "@/shared/components/ui/separator"
 import {
   Select,
   SelectContent,
@@ -22,82 +17,32 @@ import {
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip"
 import { codeToLabel } from "@/shared/keycodes"
+import { useComboFiles } from "@/combo-file/use-combo-files"
 import { toast } from "sonner"
-import type { CompactCorner, HotkeyBinding } from "@/shared/types"
+import type { HotkeyBinding } from "@/shared/types"
 
 type HotkeysTabProps = {
   hotkeys: HotkeyBinding[]
-  compactCorner: CompactCorner
   onAddHotkey: () => void
   onDeleteHotkey: (id: string) => void
   onUpdateHotkey: (id: string, hotkey: string) => void
   onUpdatePath: (id: string, path: string) => void
   onMoveHotkeyUp: (id: string) => void
   onMoveHotkeyDown: (id: string) => void
-  onSetCompactCorner: (corner: CompactCorner) => void
 }
 
 export function HotkeysTab({
   hotkeys,
-  compactCorner,
   onAddHotkey,
   onDeleteHotkey,
   onUpdateHotkey,
   onUpdatePath,
   onMoveHotkeyUp,
   onMoveHotkeyDown,
-  onSetCompactCorner,
 }: HotkeysTabProps) {
   const [capturingId, setCapturingId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [alwaysOnTop, setAlwaysOnTop] = useState(() => {
-    return localStorage.getItem("combo-macro-always-on-top") === "true"
-  })
-  const [autoLoad, setAutoLoad] = useState(() => {
-    return localStorage.getItem("combo-macro-auto-load") !== "false"
-  })
-
-  const toggleAlwaysOnTop = async (v: boolean) => {
-    setAlwaysOnTop(v)
-    localStorage.setItem("combo-macro-always-on-top", String(v))
-    await getCurrentWindow().setAlwaysOnTop(v)
-  }
-
-  const toggleAutoLoad = (v: boolean) => {
-    setAutoLoad(v)
-    localStorage.setItem("combo-macro-auto-load", String(v))
-  }
-
-  const COMBO_DIR_KEY = "combo-macro-combo-dir"
-
-  const [comboDir, setComboDir] = useState(() => {
-    return localStorage.getItem(COMBO_DIR_KEY) ?? ""
-  })
-  const [comboFiles, setComboFiles] = useState<{ name: string; path: string }[]>([])
-
-  const handleSetComboDir = async () => {
-    const selected = await open({ directory: true, multiple: false })
-    if (selected) {
-      setComboDir(selected as string)
-      localStorage.setItem(COMBO_DIR_KEY, selected as string)
-      await refreshComboFiles(selected as string)
-    }
-  }
-
-  const refreshComboFiles = async (dir: string) => {
-    if (!dir) { setComboFiles([]); return }
-    try {
-      const files = await invoke<{ name: string; path: string }[]>("list_combo_files", { path: dir })
-      setComboFiles(files)
-    } catch {
-      setComboFiles([])
-    }
-  }
-
-  useEffect(() => {
-    const saved = localStorage.getItem(COMBO_DIR_KEY)
-    if (saved) refreshComboFiles(saved)
-  }, [])
+  const { comboFiles } = useComboFiles()
 
   useEffect(() => {
     if (!capturingId) return
@@ -354,92 +299,6 @@ export function HotkeysTab({
           Add Hotkey
         </Button>
 
-        <Separator />
-
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Window</Label>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="always-on-top-hotkeys" className="font-normal">
-            Always on top
-          </Label>
-          <Switch
-            id="always-on-top-hotkeys"
-            checked={alwaysOnTop}
-            onCheckedChange={toggleAlwaysOnTop}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="auto-load-last" className="font-normal">
-            Auto-load last combo on startup
-          </Label>
-          <Switch
-            id="auto-load-last"
-            checked={autoLoad}
-            onCheckedChange={toggleAutoLoad}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label className="font-normal">
-            Combo files directory
-          </Label>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-              {comboDir || "Not set"}
-            </span>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="size-6 shrink-0"
-                    aria-label="Select directory"
-                    onClick={handleSetComboDir}
-                  >
-                    <FolderOpen className="size-3.5" />
-                  </Button>
-                }
-              />
-              <TooltipContent>Select directory</TooltipContent>
-            </Tooltip>
-            {comboDir && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="size-6 shrink-0"
-                      aria-label="Refresh file list"
-                      onClick={() => refreshComboFiles(comboDir)}
-                    >
-                      <RefreshCw className="size-3.5" />
-                    </Button>
-                  }
-                />
-                <TooltipContent>Refresh</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label className="font-normal">Snap compact to</Label>
-          <Select value={compactCorner} onValueChange={(v) => onSetCompactCorner(v as CompactCorner)}>
-            <SelectTrigger size="sm" className="w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Auto (nearest)</SelectItem>
-              <SelectItem value="top-right">Top-right</SelectItem>
-              <SelectItem value="top-left">Top-left</SelectItem>
-              <SelectItem value="bottom-right">Bottom-right</SelectItem>
-              <SelectItem value="bottom-left">Bottom-left</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </CardContent>
     </Card>
   )

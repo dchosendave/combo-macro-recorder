@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { getCurrentWindow } from "@tauri-apps/api/window"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs"
+import { SidebarInset, SidebarProvider } from "@/shared/components/ui/sidebar"
 import { AppHeader } from "@/app/app-header"
+import { AppSidebar } from "@/app/app-sidebar"
 import { TitleBar } from "@/app/title-bar"
 import { KeysTab } from "@/potions/keys-tab"
 import { SkillsTab } from "@/skills/skills-tab"
 import { HotkeysTab } from "@/hotkeys/hotkeys-tab"
+import { SettingsTab } from "@/settings/settings-tab"
 import { CompactOverlay } from "@/runner/compact-overlay"
 import { StartupDialog } from "@/combo-file/startup-dialog"
 import { ConfirmDiscardDialog } from "@/combo-file/confirm-discard-dialog"
@@ -26,6 +28,7 @@ import { useMacroRunner } from "@/runner/use-macro-runner"
 import { useCompactMode } from "@/runner/use-compact-mode"
 import { useComboFile } from "@/combo-file/use-combo-file"
 import { useRecentFiles } from "@/combo-file/use-recent-files"
+import { useComboFiles } from "@/combo-file/use-combo-files"
 import { useGlobalHotkeys } from "@/hotkeys/use-global-hotkeys"
 import { codeToLabel } from "@/shared/keycodes"
 import "./App.css"
@@ -73,6 +76,7 @@ function App() {
   })
 
   const { recentFiles, addRecent, removeRecent, clearRecent } = useRecentFiles()
+  const { comboFiles, refreshComboFiles } = useComboFiles()
 
   const {
     currentFilePath,
@@ -155,13 +159,13 @@ function App() {
     exitCompact()
   }, [settings, exitCompact, newCombo])
 
-  const [activeTab, setActiveTab] = useState("combo")
-  const [innerTab, setInnerTab] = useState("potions")
+  const [activeTab, setActiveTab] = useState<"combo" | "profiles" | "settings">("combo")
+  const [innerTab, setInnerTab] = useState<"potions" | "skills">("potions")
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Tab") {
       e.preventDefault()
-      const ORDER = ["combo", "profiles"] as const
+      const ORDER = ["combo", "profiles", "settings"] as const
       setActiveTab((prev) => {
         const idx = ORDER.indexOf(prev as (typeof ORDER)[number])
         const dir = e.shiftKey ? -1 : 1
@@ -187,7 +191,17 @@ function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden" onKeyDown={handleKeyDown}>
       <TitleBar onRequestClose={handleRequestClose} />
-      <main className="flex flex-1 min-h-0 flex-col gap-4 p-4">
+      <SidebarProvider className="flex-1 min-h-0">
+        <AppSidebar
+          activeTab={activeTab}
+          innerTab={innerTab}
+          onSelectTab={setActiveTab}
+          onSelectInnerTab={(tab) => {
+            setActiveTab("combo")
+            setInnerTab(tab)
+          }}
+        />
+        <SidebarInset className="min-h-0 gap-4 p-4">
         <AppHeader
           running={anyRunning}
           elapsed={elapsed}
@@ -205,117 +219,108 @@ function App() {
           recentFiles={recentFiles}
           onOpenRecent={handleOpenRecent}
           onClearRecent={clearRecent}
+          comboFiles={comboFiles}
+          onRequestComboFiles={refreshComboFiles}
+          onSelectComboFile={requestOpenPath}
         />
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0">
-          <TabsList className="w-full">
-            <TabsTrigger value="combo">Combo</TabsTrigger>
-            <TabsTrigger value="profiles">Hotkeys</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="combo" className="flex-1 min-h-0 flex flex-col animate-in fade-in-0 duration-200">
-            <Tabs value={innerTab} onValueChange={setInnerTab} className="flex-1 min-h-0 flex flex-col">
-              <TabsList variant="line" className="w-full h-7">
-                <TabsTrigger value="potions" className="text-xs px-2">Potions</TabsTrigger>
-                <TabsTrigger value="skills" className="text-xs px-2">Skills</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="potions" className="flex-1 min-h-0 animate-in fade-in-0 duration-200">
-                <KeysTab
-                  autoPotions={settings.potionsEnabled}
-                  setAutoPotions={settings.setPotionsEnabled}
-                  keys={settings.potionKeys}
-                  togglePotionKey={settings.togglePotionKey}
-                  customDelay={settings.customDelay}
-                  setCustomDelayEnabled={settings.setCustomDelayEnabled}
-                  delayMs={settings.delayMs}
-                  setDelayMs={settings.setDelayMs}
-                  delayError={settings.potionsDelayError}
-                  repeatMode={settings.potionsRepeatMode}
-                  setRepeatMode={settings.setPotionsRepeatMode}
-                  repeatCount={settings.potionsRepeatCount}
-                  setRepeatCount={settings.setPotionsRepeatCount}
-                  repeatError={settings.potionsRepeatError}
-                />
-              </TabsContent>
-
-              <TabsContent value="skills" className="flex-1 min-h-0 animate-in fade-in-0 duration-200">
-                <SkillsTab
-                  enabled={settings.skillsEnabled}
-                  setEnabled={settings.setSkillsEnabled}
-                  steps={settings.skillSteps}
-                  onSetSteps={settings.setSkillSteps}
-                  onAddKeydown={settings.addSkillKeydown}
-                  onAddKeyup={settings.addSkillKeyup}
-                  onAddDelay={settings.addSkillDelay}
-                  onRemoveStep={settings.removeSkillStep}
-                  onMoveStepUp={settings.moveSkillStepUp}
-                  onMoveStepDown={settings.moveSkillStepDown}
-                  onDuplicateStep={settings.duplicateSkillStep}
-                  onUpdateStep={settings.updateSkillStep}
-                  labelStyle={settings.labelStyle}
-                  setLabelStyle={settings.setLabelStyle}
-                  holdRightClick={settings.holdRightClick}
-                  setHoldRightClick={settings.setHoldRightClick}
-                  repeatMode={settings.skillsRepeatMode}
-                  setRepeatMode={settings.setSkillsRepeatMode}
-                  repeatCount={settings.skillsRepeatCount}
-                  setRepeatCount={settings.setSkillsRepeatCount}
-                  repeatError={settings.skillsRepeatError}
-                  onUndo={settings.undoSteps}
-                  onRedo={settings.redoSteps}
-                  canUndo={settings.canUndoSteps}
-                  canRedo={settings.canRedoSteps}
-                  onRecordedSteps={settings.onRecordedSteps}
-                />
-              </TabsContent>
-            </Tabs>
-          </TabsContent>
-
-          <TabsContent value="profiles" className="flex-1 min-h-0 animate-in fade-in-0 duration-200">
+        <div className="flex min-h-0 flex-1 flex-col animate-in fade-in-0 duration-200">
+          {activeTab === "combo" ? (
+            innerTab === "potions" ? (
+              <KeysTab
+                autoPotions={settings.potionsEnabled}
+                setAutoPotions={settings.setPotionsEnabled}
+                keys={settings.potionKeys}
+                togglePotionKey={settings.togglePotionKey}
+                customDelay={settings.customDelay}
+                setCustomDelayEnabled={settings.setCustomDelayEnabled}
+                delayMs={settings.delayMs}
+                setDelayMs={settings.setDelayMs}
+                delayError={settings.potionsDelayError}
+                repeatMode={settings.potionsRepeatMode}
+                setRepeatMode={settings.setPotionsRepeatMode}
+                repeatCount={settings.potionsRepeatCount}
+                setRepeatCount={settings.setPotionsRepeatCount}
+                repeatError={settings.potionsRepeatError}
+              />
+            ) : (
+              <SkillsTab
+                enabled={settings.skillsEnabled}
+                setEnabled={settings.setSkillsEnabled}
+                steps={settings.skillSteps}
+                onSetSteps={settings.setSkillSteps}
+                onAddKeydown={settings.addSkillKeydown}
+                onAddKeyup={settings.addSkillKeyup}
+                onAddDelay={settings.addSkillDelay}
+                onRemoveStep={settings.removeSkillStep}
+                onMoveStepUp={settings.moveSkillStepUp}
+                onMoveStepDown={settings.moveSkillStepDown}
+                onDuplicateStep={settings.duplicateSkillStep}
+                onUpdateStep={settings.updateSkillStep}
+                labelStyle={settings.labelStyle}
+                setLabelStyle={settings.setLabelStyle}
+                holdRightClick={settings.holdRightClick}
+                setHoldRightClick={settings.setHoldRightClick}
+                repeatMode={settings.skillsRepeatMode}
+                setRepeatMode={settings.setSkillsRepeatMode}
+                repeatCount={settings.skillsRepeatCount}
+                setRepeatCount={settings.setSkillsRepeatCount}
+                repeatError={settings.skillsRepeatError}
+                onUndo={settings.undoSteps}
+                onRedo={settings.redoSteps}
+                canUndo={settings.canUndoSteps}
+                canRedo={settings.canRedoSteps}
+                onRecordedSteps={settings.onRecordedSteps}
+              />
+            )
+          ) : activeTab === "profiles" ? (
             <HotkeysTab
               hotkeys={settings.hotkeys}
-              compactCorner={compactCorner}
               onAddHotkey={settings.addHotkey}
               onDeleteHotkey={settings.deleteHotkey}
               onUpdateHotkey={settings.updateHotkeyBinding}
               onUpdatePath={settings.updateHotkeyPath}
               onMoveHotkeyUp={settings.moveHotkeyUp}
               onMoveHotkeyDown={settings.moveHotkeyDown}
+            />
+          ) : (
+            <SettingsTab
+              compactCorner={compactCorner}
               onSetCompactCorner={setCompactCorner}
             />
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
 
-        <StartupDialog
-          open={showStartup}
-          onOpen={handleStartupOpen}
-          onNew={handleStartupNew}
-        />
+    <StartupDialog
+      open={showStartup}
+      onOpen={handleStartupOpen}
+      onNew={handleStartupNew}
+    />
 
-        <ConfirmDiscardDialog
-          open={pendingAction !== null}
-          onConfirm={confirmDiscard}
-          onCancel={cancelDiscard}
-        />
+    <ConfirmDiscardDialog
+      open={pendingAction !== null}
+      onConfirm={confirmDiscard}
+      onCancel={cancelDiscard}
+    />
 
-        <AlertDialog open={showCloseConfirm}>
-          <AlertDialogContent size="sm">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
-              <AlertDialogDescription>
-                You have unsaved changes. Close without saving?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleCloseCancel}>Cancel</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={handleCloseConfirm}>
-                Discard &amp; Close
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </main>
+    <AlertDialog open={showCloseConfirm}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+          <AlertDialogDescription>
+            You have unsaved changes. Close without saving?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={handleCloseCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={handleCloseConfirm}>
+            Discard &amp; Close
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </div>
   )
 }

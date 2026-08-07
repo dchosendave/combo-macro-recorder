@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes"
-import { FilePlus, FolderOpen, History, Moon, Play, RotateCcw, Save, SaveAll, Square, Sun } from "lucide-react"
+import { Check, ChevronDown, FilePlus, FolderOpen, History, Moon, Play, RotateCcw, Save, SaveAll, Square, Sun } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { Badge } from "@/shared/components/ui/badge"
 import {
@@ -21,12 +21,15 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu"
 import { formatElapsed } from "@/shared/format"
+import { SidebarTrigger } from "@/shared/components/ui/sidebar"
+import type { ComboFileEntry } from "@/combo-file/use-combo-files"
 
 type AppHeaderProps = {
   running: boolean
@@ -45,6 +48,9 @@ type AppHeaderProps = {
   recentFiles: string[]
   onOpenRecent: (path: string) => void
   onClearRecent: () => void
+  comboFiles: ComboFileEntry[]
+  onRequestComboFiles: () => void
+  onSelectComboFile: (path: string) => void
 }
 
 export function AppHeader({
@@ -64,18 +70,56 @@ export function AppHeader({
   recentFiles,
   onOpenRecent,
   onClearRecent,
+  comboFiles,
+  onRequestComboFiles,
+  onSelectComboFile,
 }: AppHeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
   return (
     <header className="flex items-center justify-between">
       <div className="flex items-center gap-2.5">
-        <span className="font-heading text-base font-semibold">
-          Combo
-        </span>
-        <span className="max-w-[180px] truncate text-xs text-muted-foreground">
-          {fileName ? fileName.split(/[\\/]/).pop() : "Untitled"}
-        </span>
+        <SidebarTrigger size="icon" className="text-muted-foreground" />
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) onRequestComboFiles()
+          }}
+        >
+          <DropdownMenuTrigger
+            render={
+              <Button
+                size="xs"
+                variant="ghost"
+                className="h-6 gap-1 px-2 text-xs text-muted-foreground"
+                aria-label="Switch combo file"
+              >
+                <span className="max-w-[180px] truncate">
+                  {fileName ? fileName.split(/[\\/]/).pop() : "Untitled"}
+                </span>
+                <ChevronDown className="size-3 shrink-0" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Combo files</DropdownMenuLabel>
+            </DropdownMenuGroup>
+            {comboFiles.length === 0 ? (
+              <DropdownMenuItem disabled>No combo files found</DropdownMenuItem>
+            ) : (
+              comboFiles.map((file) => (
+                <DropdownMenuItem
+                  key={file.path}
+                  onClick={() => onSelectComboFile(file.path)}
+                  title={file.path}
+                >
+                  <span className="max-w-[220px] truncate">{file.name}</span>
+                  {fileName === file.path && <Check className="ml-auto size-4" />}
+                </DropdownMenuItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {isDirty && (
           <Tooltip>
             <TooltipTrigger
@@ -164,14 +208,16 @@ export function AppHeader({
               <TooltipContent>Recent combos</TooltipContent>
             </Tooltip>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Recent combos</DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Recent combos</DropdownMenuLabel>
+              </DropdownMenuGroup>
               {recentFiles.map((path) => (
-                <DropdownMenuItem key={path} onSelect={() => onOpenRecent(path)} title={path}>
+                <DropdownMenuItem key={path} onClick={() => onOpenRecent(path)} title={path}>
                   <span className="max-w-[220px] truncate">{path.split(/[\\/]/).pop()}</span>
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={onClearRecent}>
+              <DropdownMenuItem variant="destructive" onClick={onClearRecent}>
                 Clear recent files
               </DropdownMenuItem>
             </DropdownMenuContent>
