@@ -1,5 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest"
-import { loadHotkeys, saveHotkeys, clearHotkeys, STORAGE_KEY } from "./persistence"
+import {
+  loadHotkeys,
+  saveHotkeys,
+  clearHotkeys,
+  STORAGE_KEY,
+  loadRecentFiles,
+  saveRecentFiles,
+  addRecentPath,
+  clearRecentFiles,
+  RECENT_FILES_KEY,
+  MAX_RECENT_FILES,
+} from "./persistence"
 
 function seed(raw: string) {
   localStorage.setItem(STORAGE_KEY, raw)
@@ -104,5 +115,74 @@ describe("saveHotkeys / clearHotkeys", () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
     // Back to defaults after clearing.
     expect(loadHotkeys()[0].hotkey).toBe("F5")
+  })
+})
+
+describe("loadRecentFiles", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it("returns an empty list when storage is empty", () => {
+    expect(loadRecentFiles()).toEqual([])
+  })
+
+  it("returns an empty list for corrupt JSON", () => {
+    localStorage.setItem(RECENT_FILES_KEY, "{oops")
+    expect(loadRecentFiles()).toEqual([])
+  })
+
+  it("returns an empty list when the stored value is not an array", () => {
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify({ paths: ["a.json"] }))
+    expect(loadRecentFiles()).toEqual([])
+  })
+
+  it("round-trips a stored list", () => {
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(["a.json", "b.json"]))
+    expect(loadRecentFiles()).toEqual(["a.json", "b.json"])
+  })
+
+  it("filters out non-string and empty entries", () => {
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(["a.json", 42, "", null, "b.json"]))
+    expect(loadRecentFiles()).toEqual(["a.json", "b.json"])
+  })
+})
+
+describe("addRecentPath", () => {
+  it("prepends a new path", () => {
+    expect(addRecentPath(["b.json"], "a.json")).toEqual(["a.json", "b.json"])
+  })
+
+  it("moves an existing entry to the front without duplicating", () => {
+    expect(addRecentPath(["a.json", "b.json"], "b.json")).toEqual(["b.json", "a.json"])
+  })
+
+  it("caps the list at MAX_RECENT_FILES, dropping the oldest", () => {
+    // 8 slots are full; adding a 9th path evicts the oldest entry.
+    const existing = Array.from({ length: MAX_RECENT_FILES }, (_, i) => `c${i}.json`)
+    const result = addRecentPath(existing, "new.json")
+    expect(result).toHaveLength(MAX_RECENT_FILES)
+    expect(result[0]).toBe("new.json")
+    expect(result).not.toContain("c7.json")
+    expect(result).toContain("c0.json")
+  })
+})
+
+describe("saveRecentFiles / clearRecentFiles", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it("save then load round-trips and stores the raw array", () => {
+    saveRecentFiles(["a.json", "b.json"])
+    expect(loadRecentFiles()).toEqual(["a.json", "b.json"])
+    expect(JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "null")).toEqual(["a.json", "b.json"])
+  })
+
+  it("clearRecentFiles removes the storage key", () => {
+    saveRecentFiles(["a.json"])
+    clearRecentFiles()
+    expect(localStorage.getItem(RECENT_FILES_KEY)).toBeNull()
+    expect(loadRecentFiles()).toEqual([])
   })
 })

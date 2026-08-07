@@ -19,11 +19,11 @@ const OPENED_CONTENT = exportComboToString({
   skills: defaultSkillConfig(),
 })
 
-function setup() {
+function setup(overrides: Partial<Parameters<typeof useComboFile>[0]> = {}) {
   const combo: CurrentCombo = { potions: defaultPotionConfig(), skills: defaultSkillConfig() }
   const applyCombo = vi.fn()
   const onSave = vi.fn()
-  const makeProps = () => ({ getCombo: () => combo, applyCombo, onSave })
+  const makeProps = () => ({ getCombo: () => combo, applyCombo, onSave, ...overrides })
   const hook = renderHook((props: Parameters<typeof useComboFile>[0]) => useComboFile(props), {
     initialProps: makeProps(),
   })
@@ -75,7 +75,7 @@ describe("useComboFile", () => {
     act(() => {
       hook.result.current.requestOpen()
     })
-    expect(hook.result.current.pendingAction).toBe("open")
+    expect(hook.result.current.pendingAction).toEqual({ type: "open" })
     expect(openMock).not.toHaveBeenCalled()
 
     act(() => {
@@ -276,5 +276,103 @@ describe("useComboFile", () => {
 
     expect(loaded).toBe(false)
     expect(invokeMock).not.toHaveBeenCalled()
+  })
+
+  it("openPath reads and applies the file at the given path", async () => {
+    const onOpened = vi.fn()
+    const { applyCombo, hook } = setup({ onOpened })
+    invokeMock.mockResolvedValueOnce(OPENED_CONTENT)
+
+    let ok: boolean | null = null
+    await act(async () => {
+      ok = await hook.result.current.openPath(PATH)
+    })
+
+    expect(ok).toBe(true)
+    expect(openMock).not.toHaveBeenCalled()
+    expect(invokeMock).toHaveBeenCalledWith("read_file", { path: PATH })
+    expect(applyCombo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        potions: expect.objectContaining({ customDelay: true, delayMs: "150" }),
+      }),
+    )
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+    expect(localStorage.getItem(LAST_PATH_KEY)).toBe(PATH)
+    expect(onOpened).toHaveBeenCalledWith(PATH)
+    expect(toastMock.success).toHaveBeenCalledWith("Opened a.json")
+    expect(hook.result.current.isProcessing).toBe(false)
+  })
+
+  it("openPath failure toasts an error, reports onOpenFailed, and keeps the current file", async () => {
+    const onOpenFailed = vi.fn()
+    const { applyCombo, hook } = setup({ onOpenFailed })
+    invokeMock.mockRejectedValueOnce(new Error("missing"))
+
+    let ok: boolean | null = null
+    await act(async () => {
+      ok = await hook.result.current.openPath(PATH)
+    })
+
+    expect(ok).toBe(false)
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("Open failed"))
+    expect(onOpenFailed).toHaveBeenCalledWith(PATH)
+    expect(applyCombo).not.toHaveBeenCalled()
+    expect(hook.result.current.currentFilePath).toBeNull()
+    expect(hook.result.current.isProcessing).toBe(false)
+  })
+
+  it("requestOpenPath opens the path immediately when clean", async () => {
+    const { applyCombo, hook } = setup()
+    invokeMock.mockResolvedValueOnce(OPENED_CONTENT)
+
+    await act(async () => {
+      hook.result.current.requestOpenPath(PATH)
+    })
+
+    expect(openMock).not.toHaveBeenCalled()
+    expect(invokeMock).toHaveBeenCalledWith("read_file", { path: PATH })
+    expect(applyCombo).toHaveBeenCalled()
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+  })
+
+  it("requestOpenPath while dirty defers until discard is confirmed", async () => {
+    const { combo, hook, rerender } = setup()
+    combo.potions.delayMs = "200"
+    rerender()
+
+    act(() => {
+      hook.result.current.requestOpenPath(PATH)
+    })
+    expect(hook.result.current.pendingAction).toEqual({ type: "open", path: PATH })
+    expect(openMock).not.toHaveBeenCalled()
+    expect(invokeMock).not.toHaveBeenCalled()
+
+    invokeMock.mockResolvedValueOnce(OPENED_CONTENT)
+    await act(async () => {
+      hook.result.current.confirmDiscard()
+    })
+
+    expect(openMock).not.toHaveBeenCalled()
+    expect(invokeMock).toHaveBeenCalledWith("read_file", { path: PATH })
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+    expect(hook.result.current.pendingAction).toBeNull()
+  })
+
+  it("cancelling discard after requestOpenPath does not open the path", async () => {
+    const { combo, hook, rerender } = setup()
+    combo.potions.delayMs = "200"
+    rerender()
+
+    act(() => {
+      hook.result.current.requestOpenPath(PATH)
+    })
+    act(() => {
+      hook.result.current.cancelDiscard()
+    })
+
+    expect(hook.result.current.pendingAction).toBeNull()
+    expect(openMock).not.toHaveBeenCalled()
+    expect(invokeMock).not.toHaveBeenCalled()
+    expect(hook.result.current.currentFilePath).toBeNull()
   })
 })

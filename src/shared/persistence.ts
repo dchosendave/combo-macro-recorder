@@ -42,3 +42,30 @@ export function saveHotkeys(hotkeys: HotkeyBinding[]) {
 export function clearHotkeys() {
   localStorage.removeItem(STORAGE_KEY)
 }
+
+export const RECENT_FILES_KEY = "combo-macro-recent-files"
+export const MAX_RECENT_FILES = 8
+
+export function loadRecentFiles(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_FILES_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((p) => typeof p === "string" && p.length > 0)
+  } catch {
+    return []
+  }
+}
+
+export function saveRecentFiles(paths: string[]) {
+  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(paths))
+}
+
+export function addRecentPath(paths: string[], path: string): string[] {
+  return [path, ...paths.filter((p) => p !== path)].slice(0, MAX_RECENT_FILES)
+}
+
+export function clearRecentFiles() {
+  localStorage.removeItem(RECENT_FILES_KEY)
+}

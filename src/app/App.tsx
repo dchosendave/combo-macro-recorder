@@ -21,9 +21,11 @@ import {
   AlertDialogTitle,
 } from "@/shared/components/ui/alert-dialog"
 import { useSettings } from "@/app/use-settings"
+import { useWindowFit } from "@/app/use-window-fit"
 import { useMacroRunner } from "@/runner/use-macro-runner"
 import { useCompactMode } from "@/runner/use-compact-mode"
 import { useComboFile } from "@/combo-file/use-combo-file"
+import { useRecentFiles } from "@/combo-file/use-recent-files"
 import { useGlobalHotkeys } from "@/hotkeys/use-global-hotkeys"
 import { codeToLabel } from "@/shared/keycodes"
 import "./App.css"
@@ -31,6 +33,7 @@ import "./App.css"
 function App() {
   const settings = useSettings()
   const { compactMode, compactCorner, setCompactCorner, enterCompact, exitCompact } = useCompactMode()
+  useWindowFit()
 
   const runningProfileIdRef = useRef<string | null>(null)
 
@@ -69,6 +72,8 @@ function App() {
     runningProfileIdRef,
   })
 
+  const { recentFiles, addRecent, removeRecent, clearRecent } = useRecentFiles()
+
   const {
     currentFilePath,
     openFile,
@@ -80,10 +85,20 @@ function App() {
     pendingAction,
     requestOpen,
     requestNew,
+    requestOpenPath,
     confirmDiscard,
     cancelDiscard,
     tryAutoLoad,
-  } = useComboFile({ getCombo, applyCombo: settings.applyCombo, onSave: clearCachedCombo })
+  } = useComboFile({
+    getCombo,
+    applyCombo: settings.applyCombo,
+    onOpened: addRecent,
+    onOpenFailed: removeRecent,
+    onSave: (path) => {
+      clearCachedCombo(path)
+      addRecent(path)
+    },
+  })
 
   const [showStartup, setShowStartup] = useState(true)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
@@ -123,6 +138,10 @@ function App() {
     const ok = await openFile()
     if (ok) setShowStartup(false)
   }, [openFile])
+
+  const handleOpenRecent = useCallback((path: string) => {
+    requestOpenPath(path)
+  }, [requestOpenPath])
 
   const handleStartupNew = useCallback(() => {
     newCombo()
@@ -183,6 +202,9 @@ function App() {
           onNew={requestNew}
           onSave={saveFile}
           onSaveAs={saveFileAs}
+          recentFiles={recentFiles}
+          onOpenRecent={handleOpenRecent}
+          onClearRecent={clearRecent}
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0">

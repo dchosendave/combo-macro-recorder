@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes"
-import { FilePlus, FolderOpen, Moon, Play, RotateCcw, Save, SaveAll, Square, Sun } from "lucide-react"
+import { FilePlus, FolderOpen, History, Moon, Play, RotateCcw, Save, SaveAll, Square, Sun } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { Badge } from "@/shared/components/ui/badge"
 import {
@@ -18,6 +18,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/shared/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/shared/components/ui/dropdown-menu"
 import { formatElapsed } from "@/shared/format"
 
 type AppHeaderProps = {
@@ -34,6 +42,9 @@ type AppHeaderProps = {
   onNew: () => void
   onSave: () => void
   onSaveAs: () => void
+  recentFiles: string[]
+  onOpenRecent: (path: string) => void
+  onClearRecent: () => void
 }
 
 export function AppHeader({
@@ -50,6 +61,9 @@ export function AppHeader({
   onNew,
   onSave,
   onSaveAs,
+  recentFiles,
+  onOpenRecent,
+  onClearRecent,
 }: AppHeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
@@ -128,6 +142,41 @@ export function AppHeader({
           />
           <TooltipContent>Open (Ctrl+O)</TooltipContent>
         </Tooltip>
+        {recentFiles.length > 0 && (
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={isProcessing}
+                        aria-label="Recent combos"
+                      >
+                        <History className="size-4" />
+                      </Button>
+                    }
+                  />
+                }
+              />
+              <TooltipContent>Recent combos</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Recent combos</DropdownMenuLabel>
+              {recentFiles.map((path) => (
+                <DropdownMenuItem key={path} onSelect={() => onOpenRecent(path)} title={path}>
+                  <span className="max-w-[220px] truncate">{path.split(/[\\/]/).pop()}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={onClearRecent}>
+                Clear recent files
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         <Tooltip>
           <TooltipTrigger
             render={

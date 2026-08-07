@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Window now opens at a 16:9 default sized to ~2/3 of the screen's work-area width (1280x720 on a 1080p monitor), scaling up proportionally on larger screens.
+- Recent Combos dropdown (History button in the header) listing the last 8 opened/saved combo files, with click-to-reopen through the normal unsaved-changes flow and stale entries dropped on failed reads.
 - Comprehensive automated test suite: frontend pure logic + all hooks (vitest + jsdom + `@testing-library/react`, 181 tests) and backend gaps (56 Rust tests, including the hotkey diff/rollback, channel stop semantics, and error paths).
 - CI workflow (`.github/workflows/test.yml`) running `npm test` + `cargo test` on `windows-latest` for every push/PR.
 - Document usage in the README (features, quick start, combo file format, troubleshooting).

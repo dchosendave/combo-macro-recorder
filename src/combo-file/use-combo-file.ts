@@ -13,12 +13,14 @@ type UseComboFileArgs = {
   getCombo: () => CurrentCombo
   applyCombo: (combo: CurrentCombo) => void
   onSave?: (path: string) => void
+  onOpened?: (path: string) => void
+  onOpenFailed?: (path: string) => void
 }
 
-type PendingAction = "open" | "new"
+type PendingAction = { type: "open" | "new"; path?: string } | null
 
 /** Combo file lifecycle: open/save/save-as/new with dirty tracking (string comparison against a baseline snapshot), unsaved-changes confirm dialogs, Ctrl+S, and auto-load of the last file on startup. */
-export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs) {
+export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFailed }: UseComboFileArgs) {
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [baseline, setBaseline] = useState(EMPTY_BASELINE)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
@@ -44,6 +46,34 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
     setIsProcessing(false)
   }, [applyCombo])
 
+  const openPathCore = useCallback(async (path: string): Promise<boolean> => {
+    try {
+      const content = await invoke<string>("read_file", { path })
+      const combo = importComboFromString(content)
+      applyCombo(combo)
+      setCurrentFilePath(path)
+      setBaseline(exportComboToString(combo))
+      localStorage.setItem(LAST_PATH_KEY, path)
+      toast.success(`Opened ${path.split(/[\\/]/).pop() ?? path}`)
+      onOpened?.(path)
+      return true
+    } catch (e) {
+      toast.error(`Open failed: ${e}`)
+      onOpenFailed?.(path)
+      return false
+    }
+  }, [applyCombo, onOpened, onOpenFailed])
+
+  const openPath = useCallback(async (path: string): Promise<boolean> => {
+    if (isProcessing) return false
+    setIsProcessing(true)
+    try {
+      return await openPathCore(path)
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [isProcessing, openPathCore])
+
   const openFile = useCallback(async () => {
     if (isProcessing) return false
     setIsProcessing(true)
@@ -52,26 +82,12 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
         filters: [{ name: "JSON", extensions: ["json"] }],
         multiple: false,
       })
-      if (!path) {
-        setIsProcessing(false)
-        return false
-      }
-      const content = await invoke<string>("read_file", { path: path as string })
-      const combo = importComboFromString(content)
-      applyCombo(combo)
-      setCurrentFilePath(path as string)
-      setBaseline(exportComboToString(combo))
-      localStorage.setItem(LAST_PATH_KEY, path as string)
-      const openedName = (path as string).split(/[\\\\/]/).pop() ?? path
-      toast.success(`Opened ${openedName}`)
+      if (!path) return false
+      return await openPathCore(path)
+    } finally {
       setIsProcessing(false)
-      return true
-    } catch (e) {
-      toast.error(`Open failed: ${e}`)
-      setIsProcessing(false)
-      return false
     }
-  }, [applyCombo, isProcessing])
+  }, [isProcessing, openPathCore])
 
   const saveToPath = useCallback(
     async (path: string) => {
@@ -121,7 +137,7 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
 
   const requestOpen = useCallback(() => {
     if (isDirty) {
-      setPendingAction("open")
+      setPendingAction({ type: "open" })
       return
     }
     openFile()
@@ -129,7 +145,7 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
 
   const requestNew = useCallback(() => {
     if (isDirty) {
-      setPendingAction("new")
+      setPendingAction({ type: "new" })
       return
     }
     doNew()
@@ -157,16 +173,26 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
   const confirmDiscard = useCallback(() => {
     const action = pendingAction
     setPendingAction(null)
-    if (action === "open") {
-      openFile()
-    } else if (action === "new") {
+    if (!action) return
+    if (action.type === "open") {
+      if (action.path) openPath(action.path)
+      else openFile()
+    } else {
       doNew()
     }
-  }, [pendingAction, openFile, doNew])
+  }, [pendingAction, openPath, openFile, doNew])
 
   const cancelDiscard = useCallback(() => {
     setPendingAction(null)
   }, [])
+
+  const requestOpenPath = useCallback((path: string) => {
+    if (isDirty) {
+      setPendingAction({ type: "open", path })
+      return
+    }
+    openPath(path)
+  }, [isDirty, openPath])
 
   const tryAutoLoad = useCallback(async (): Promise<boolean> => {
     const autoLoad = localStorage.getItem("combo-macro-auto-load") !== "false"
@@ -188,11 +214,11 @@ export function useComboFile({ getCombo, applyCombo, onSave }: UseComboFileArgs)
 
   return {
     currentFilePath, setCurrentFilePath,
-    openFile, saveFile, saveFileAs,
+    openFile, openPath, saveFile, saveFileAs,
     newCombo: doNew,
     isDirty, isProcessing,
     pendingAction,
-    requestOpen, requestNew,
+    requestOpen, requestNew, requestOpenPath,
     confirmDiscard, cancelDiscard,
     tryAutoLoad,
   }

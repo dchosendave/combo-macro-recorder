@@ -146,6 +146,7 @@ frontend resets running state on `stop_all` itself.
 | `combo-macro-combo-dir` | Combo folder used by the Hotkeys tab file picker |
 | `combo-macro-always-on-top` | `"true"` keeps the window always on top |
 | `combo-macro-compact-corner` | Compact overlay corner: `auto`/`top-right`/`top-left`/`bottom-right`/`bottom-left` |
+| `combo-macro-recent-files` | `string[]` of recently opened/saved combo paths, most recent first, capped at 8 |
 
 ## Combo file format
 
