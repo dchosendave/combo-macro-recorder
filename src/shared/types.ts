@@ -3,6 +3,12 @@ export type RepeatMode = "loop" | "count"
 export type StepLabelStyle = "abbreviation" | "icon"
 export type CompactCorner = "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left"
 
+/** Auto-stop-on-focus-loss: stops the macro when the configured game window loses focus. `gameProcess` is the game's executable name (e.g. `main.exe`); an empty name disables matching. */
+export type AutoStopConfig = {
+  enabled: boolean
+  gameProcess: string
+}
+
 export type SkillStep =
   | { id: string; type: "keydown"; key: string }
   | { id: string; type: "keyup"; key: string }

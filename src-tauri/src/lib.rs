@@ -3,6 +3,7 @@ mod runner;
 
 use commands::files::{list_combo_files, read_file, read_jitbit_file, save_file};
 use commands::hotkeys::{set_hotkeys, HotkeyState};
+use commands::processes::list_processes;
 use commands::recorder::{start_recording, stop_recording};
 use commands::window::set_hard_corners;
 use runner::{init_timing, start_combo, stop_all, stop_all_inner, AppState};
@@ -44,6 +45,7 @@ pub fn run() {
             stop_recording,
             list_combo_files,
             set_hard_corners,
+            list_processes,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

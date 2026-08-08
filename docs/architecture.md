@@ -69,18 +69,30 @@ sequenceDiagram
     participant FE as Frontend
     participant CMD as Rust commands
     participant RUN as Runner channels
+    participant MON as Focus monitor
     participant OS as Game
 
-    FE->>CMD: start_combo(potions|null, skills|null)
+    FE->>CMD: start_combo(potions|null, skills|null, autoStop|null)
     CMD->>RUN: acquire switch_lock
     RUN->>RUN: stop_channel(potions) + stop_channel(skills)
     RUN->>RUN: spawn enabled channels (potions/skills loops)
+    RUN->>RUN: bump monitor_gen; spawn focus monitor (if autoStop active)
     loop each cycle
         RUN->>OS: SendInput press → sleep_precise(delay) → release
         RUN-->>FE: macro-activation {channel, cycle}
         opt repeat mode = count and count reached
             RUN-->>FE: macro-finished {channel, cycle}
             RUN->>RUN: running = false, release keys, thread exits
+        end
+    end
+    loop every 250ms while channels run
+        MON->>OS: GetForegroundWindow → owning PID
+        alt game focused (after first sighting)
+            MON->>MON: reset grace timer
+        alt game not focused for > 750ms grace
+            MON->>RUN: stop_all_inner (both channels)
+            MON-->>FE: macro-auto-stopped {reason: "focus-lost"}
+            MON->>MON: thread exits
         end
     end
     FE->>CMD: stop_all (hotkey toggle / on-screen STOP)
@@ -93,13 +105,20 @@ Key property: `start_combo`/`stop_all` run under `switch_lock`
 rapid stop/start can never interleave (e.g. potions of combo A running alongside
 skills of combo B).
 
+Hotkey combo cache (`useGlobalHotkeys`): parsed combos are cached per path
+(preloaded at mount / when the profile path set changes) so presses are instant.
+`clearCachedCombo` (wired to the file-save flow) deletes the entry and bumps a
+cache generation counter; any read still in flight re-reads before caching, so a
+pre-save snapshot can never be served after a save (e.g. "hold right click"
+reverting to its old value).
+
 ## Tauri commands
 
 Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 
 | Command | Args | Returns | Purpose |
 |---|---|---|---|
-| `start_combo` | `potions: PotionConfig \| null`, `skills: SkillConfig \| null` | `()` | Atomically stop both channels, start the provided ones (`null` = leave stopped) |
+| `start_combo` | `potions: PotionConfig \| null`, `skills: SkillConfig \| null`, `autoStop: AutoStopConfig \| null` | `()` | Atomically stop both channels, start the provided ones (`null` = leave stopped); spawns the focus monitor when `autoStop` is active |
 | `stop_all` | — | `()` | Stop both channels under `switch_lock` |
 | `save_file` | `path`, `content` | `()` | Write combo JSON (`fs::write`) |
 | `read_file` | `path` | `string` | Read combo JSON (`fs::read_to_string`) |
@@ -109,6 +128,7 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 | `start_recording` | — | `()` | Start the key-polling thread |
 | `stop_recording` | — | `{timestampMs, key, action}[]` | Stop polling, return recorded events |
 | `set_hard_corners` | `enabled: bool` | `()` | Toggle Windows 11 DWM corner rounding on the calling window (`true` = square). No-op off-Windows; used by compact mode |
+| `list_processes` | — | `{pid, name, title?, friendly?}[]` | Snapshot of running processes for the Settings → Auto-stop picker: deduped by exe name (case-insensitive), sorted, with the first visible window title and a version-resource friendly name (`FileDescription` → `ProductName`) per process. Empty off-Windows |
 
 `PotionConfig`/`SkillConfig` are the backend shapes (`src-tauri/src/runner/potions.rs`,
 `skills.rs`); the frontend builds them with `toRunnerInputs` (`src/runner/runner-inputs.ts`).
@@ -120,9 +140,12 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 | `macro-toggle` | Rust → frontend | hotkey id string | once per hotkey press |
 | `macro-activation` | Rust → frontend | `{channel: "potions"\|"skills", cycle, keys?}` | potions: every **10** cycles (throttled); skills: every cycle |
 | `macro-finished` | Rust → frontend | `{channel, cycle}` | once, when Repeat-N count is reached |
+| `macro-auto-stopped` | Rust → frontend | `{reason: "focus-lost"}` | once, when the focus monitor stops a run |
 
 `macro-finished` does **not** fire for manual stops (only Repeat-N completion); the
-frontend resets running state on `stop_all` itself.
+frontend resets running state on `stop_all` itself. `macro-auto-stopped` fires only
+for the focus monitor's stop; the frontend mirrors both channels down, runs the same
+teardown as a manual stop (exit compact, clear profile ref), and toasts the reason.
 
 ## Frontend state & persistence
 
@@ -147,6 +170,7 @@ frontend resets running state on `stop_all` itself.
 | `combo-macro-always-on-top` | `"true"` keeps the window always on top |
 | `combo-macro-compact-corner` | Compact overlay corner: `auto`/`top-right`/`top-left`/`bottom-right`/`bottom-left` |
 | `combo-macro-recent-files` | `string[]` of recently opened/saved combo paths, most recent first, capped at 8 |
+| `combo-macro-auto-stop` | Auto-stop config `{enabled: boolean, gameProcess: string}` (Settings → Auto-stop) |
 
 ## Combo file format
 
@@ -203,6 +227,25 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
 - **Skills loop** (`skills.rs`): optionally holds right-click for the whole run, then
   executes the step list (`delay`/`keydown`/`keyup`). Emits `macro-activation` every cycle.
 - Repeat-N mode emits `macro-finished` and stops the channel when the count is reached.
+- **Focus monitor** (`focus.rs`): when `autoStop` is active, `start_combo_inner` spawns a
+  monitor thread that polls `GetForegroundWindow()` every 250 ms and compares the owning
+  PID against the configured game process name (`CreateToolhelp32Snapshot`). Once the game
+  has been seen focused at least once, a foreground loss persisting past the 750 ms grace
+  period stops both channels (`stop_all_inner`) and emits `macro-auto-stopped`
+  `{reason: "focus-lost"}`. The monitor is self-terminating — it exits when the channels
+  stop — and captures `monitor_gen` (bumped by every `start_combo`) so a stale monitor can
+  never stop a newer combo. The provider is abstracted behind `ForegroundProvider` (like
+  `InjectorFactory`), so tests script the foreground with a mock. Windows-only; no-op
+  fallback elsewhere.
+- **Process enumeration** (`processes.rs`) is shared by the monitor's game matching and
+  the Settings picker (`list_processes`), with two cost tiers: `running_processes()`
+  (names only, `CreateToolhelp32Snapshot`) is what the monitor polls at 4 Hz;
+  `running_processes_with_details()` additionally attaches the first visible window title
+  per PID (`EnumWindows`) and a friendly name read from each exe's version resource
+  (`GetFileVersionInfoW`/`VerQueryValueW`, `FileDescription` → `ProductName`) — disk I/O,
+  so it runs only when the picker opens. `dedupe_for_picker` collapses same-name
+  instances (the monitor matches by name, not PID) and sorts; `process_name_matches`
+  ignores case and a trailing `.exe`.
 - Key injection: `parse_key` (`src-tauri/src/runner/injector.rs`) maps each step
   key string to an `enigo::Key`. Single characters inject as `Key::Unicode`
   (SendInput `KEYEVENTF_UNICODE` — the proven path for letters/digits); named

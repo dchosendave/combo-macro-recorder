@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed
+
+- Combo-file settings saved while a hotkey preload read was still in flight could be reverted to the pre-save state on the next hotkey press (e.g. the "hold right mouse button" toggle coming back on after save/run/stop). A cache generation guard now re-reads instead of caching stale snapshots.
+
 ### Added
 
+- Auto-stop on focus loss: when enabled (Settings → Auto-stop), the macro stops shortly after you switch away from the game window; a toast explains why. The game process is set from a searchable picker that shows friendly names (exe version resource / window title) plus the file name, or typed by hand.
 - New Settings page (sidebar item): Always on top, auto-load on startup, combo files directory, and compact-overlay corner moved out of the Hotkeys tab, which now only manages hotkey bindings.
 - The current file name in the top bar is now a dropdown listing every `.json` combo in the combo directory (the one configured in the Hotkeys tab); picking one opens it through the normal unsaved-changes flow.
 - Left sidebar navigation (collapsible icon rail, Ctrl+B, persisted): Combo with Potions/Skills sub-items and Hotkeys replace the stacked tab bars; the top bar now holds only contextual actions.

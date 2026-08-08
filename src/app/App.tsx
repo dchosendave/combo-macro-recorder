@@ -31,7 +31,10 @@ import { useRecentFiles } from "@/combo-file/use-recent-files"
 import { useComboFiles } from "@/combo-file/use-combo-files"
 import { useGlobalHotkeys } from "@/hotkeys/use-global-hotkeys"
 import { codeToLabel } from "@/shared/keycodes"
+import type { AutoStopConfig } from "@/shared/types"
 import "./App.css"
+
+const AUTO_STOP_KEY = "combo-macro-auto-stop"
 
 function App() {
   const settings = useSettings()
@@ -39,6 +42,29 @@ function App() {
   useWindowFit()
 
   const runningProfileIdRef = useRef<string | null>(null)
+
+  // Auto-stop-on-focus-loss is an app-level pref (like always-on-top), owned
+  // here so the runner hook and the Settings tab share one source.
+  const [autoStop, setAutoStopState] = useState<AutoStopConfig>(() => {
+    try {
+      const saved = localStorage.getItem(AUTO_STOP_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as AutoStopConfig
+        return {
+          enabled: !!parsed.enabled,
+          gameProcess: typeof parsed.gameProcess === "string" ? parsed.gameProcess : "",
+        }
+      }
+    } catch {
+      // corrupted value — fall through to the default
+    }
+    return { enabled: false, gameProcess: "" }
+  })
+
+  const setAutoStop = useCallback((value: AutoStopConfig) => {
+    setAutoStopState(value)
+    localStorage.setItem(AUTO_STOP_KEY, JSON.stringify(value))
+  }, [])
 
   const handleStop = useCallback(() => {
     exitCompact()
@@ -57,6 +83,7 @@ function App() {
     potionsConfig: settings.potionsConfig,
     skillsCanRun: settings.skillsCanRun,
     skillsConfig: settings.skillsConfig,
+    autoStop,
     onStart: enterCompact,
     onStop: handleStop,
   })
@@ -287,6 +314,8 @@ function App() {
             <SettingsTab
               compactCorner={compactCorner}
               onSetCompactCorner={setCompactCorner}
+              autoStop={autoStop}
+              onSetAutoStop={setAutoStop}
             />
           )}
         </div>

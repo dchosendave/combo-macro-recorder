@@ -246,6 +246,50 @@ describe("useGlobalHotkeys", () => {
     expect(applyCombo).toHaveBeenCalledTimes(2)
   })
 
+  it("a stale preload resolving after a save never poisons the cache", async () => {
+    // The file had hold-right-click ON; the user saved it OFF while the mount
+    // preload read was still in flight.
+    const stale: CurrentCombo = {
+      ...COMBO_1,
+      skills: {
+        ...COMBO_1.skills,
+        enabled: true,
+        holdRightClick: true,
+        steps: [{ id: "s1", type: "keydown", key: "1" }],
+      },
+    }
+    const fresh: CurrentCombo = { ...stale, skills: { ...stale.skills, holdRightClick: false } }
+
+    const { promise, resolve } = Promise.withResolvers<string>()
+    let reads = 0
+    invokeMock.mockImplementation((cmd) => {
+      if (cmd === "read_file") {
+        reads += 1
+        // First read = the mount preload, held open; later reads are fresh.
+        return reads === 1 ? promise : Promise.resolve(exportComboToString(fresh))
+      }
+      return Promise.resolve(undefined)
+    })
+
+    const { result, applyCombo } = renderHotkeys()
+    await act(async () => {}) // let the preload start its read
+
+    // A save lands while the preload read is in flight → cache invalidated.
+    act(() => result.current.clearCachedCombo(COMBO_PATH))
+
+    // The preload's stale read resolves afterwards.
+    await act(async () => {
+      resolve(exportComboToString(stale))
+    })
+
+    // The press must apply the FRESH combo — never the stale preload snapshot.
+    await act(async () => {
+      await fireTauriEvent("macro-toggle", "p1")
+    })
+    expect(applyCombo).toHaveBeenCalledWith(fresh)
+    expect(applyCombo).not.toHaveBeenCalledWith(stale)
+  })
+
   it("reports a load failure with the profile name", async () => {
     renderHotkeys()
     invokeMock.mockImplementation((cmd) =>

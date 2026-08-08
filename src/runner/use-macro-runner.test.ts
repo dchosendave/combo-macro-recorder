@@ -34,6 +34,7 @@ function renderRunner(props?: Partial<Parameters<typeof useMacroRunner>[0]>) {
       potionsConfig: POTIONS_ONLY.potionsConfig,
       skillsCanRun: false,
       skillsConfig: POTIONS_ONLY.skillsConfig,
+      autoStop: { enabled: false, gameProcess: "" },
       onStart,
       onStop,
       ...props,
@@ -61,6 +62,7 @@ describe("useMacroRunner", () => {
     expect(invokeMock).toHaveBeenCalledWith("start_combo", {
       potions: POTIONS_ONLY.potionsConfig,
       skills: null,
+      autoStop: { enabled: false, gameProcess: "" },
     })
     expect(result.current.potionsRunning).toBe(true)
     expect(result.current.skillsRunning).toBe(false)
@@ -102,6 +104,7 @@ describe("useMacroRunner", () => {
     expect(invokeMock).toHaveBeenCalledWith("start_combo", {
       potions: POTIONS_ONLY.potionsConfig,
       skills: POTIONS_ONLY.skillsConfig,
+      autoStop: { enabled: false, gameProcess: "" },
     })
   })
 
@@ -159,5 +162,30 @@ describe("useMacroRunner", () => {
       vi.advanceTimersByTime(1000)
     })
     expect(result.current.elapsed).toBe(1)
+  })
+
+  it("forwards the autoStop config into start_combo", () => {
+    const { result } = renderRunner({ autoStop: { enabled: true, gameProcess: "main.exe" } })
+    act(() => result.current.startCombo(POTIONS_ONLY))
+    expect(invokeMock).toHaveBeenCalledWith("start_combo", {
+      potions: POTIONS_ONLY.potionsConfig,
+      skills: null,
+      autoStop: { enabled: true, gameProcess: "main.exe" },
+    })
+  })
+
+  it("macro-auto-stopped mirrors stop, runs teardown, and toasts", async () => {
+    const { result, onStop } = renderRunner()
+    act(() => result.current.startCombo(BOTH))
+    expect(result.current.potionsRunning).toBe(true)
+
+    await act(async () => {
+      await fireTauriEvent("macro-auto-stopped", { reason: "focus-lost" })
+    })
+
+    expect(result.current.potionsRunning).toBe(false)
+    expect(result.current.skillsRunning).toBe(false)
+    expect(onStop).toHaveBeenCalledTimes(1)
+    expect(toastMock.info).toHaveBeenCalledWith("Stopped: game window lost focus")
   })
 })

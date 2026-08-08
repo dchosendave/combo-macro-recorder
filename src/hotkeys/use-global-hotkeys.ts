@@ -73,6 +73,26 @@ export function useGlobalHotkeys({
   // an older press self-cancels → "last press wins".
   const seqRef = useRef(0)
 
+  // Bumped by every cache invalidation (`clearCachedCombo`). A read that
+  // started before a save must not write its pre-save snapshot into the cache
+  // afterwards — that would resurrect the old file's settings (e.g. a disabled
+  // "hold right click" coming back on) on the next press.
+  const cacheGenRef = useRef(0)
+
+  // Reads a combo file into the cache. If a save (cache invalidation) landed
+  // while the first read was in flight, re-reads once so the cached snapshot is
+  // never older than the last save.
+  const readComboFresh = async (path: string): Promise<CurrentCombo> => {
+    const gen = cacheGenRef.current
+    let content = await invoke<string>("read_file", { path })
+    if (gen !== cacheGenRef.current) {
+      content = await invoke<string>("read_file", { path })
+    }
+    const combo = importComboFromString(content)
+    comboCacheRef.current.set(path, combo)
+    return combo
+  }
+
   // Preload every attached combo file once (and whenever the set of paths
   // changes), populating the cache.
   const comboPathsKey = useMemo(
@@ -92,21 +112,22 @@ export function useGlobalHotkeys({
       for (const path of paths) {
         if (comboCacheRef.current.has(path)) continue
         try {
-          const content = await invoke<string>("read_file", { path })
-          if (cancelled) return
-          comboCacheRef.current.set(path, importComboFromString(content))
+          await readComboFresh(path)
         } catch {
           // Ignore preload failures; the on-demand path will surface errors.
         }
+        if (cancelled) return
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [comboPathsKey])
+  }, [comboPathsKey])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearCachedCombo = (path: string) => {
     comboCacheRef.current.delete(path)
+    // Invalidate any read still in flight so it can't repopulate stale data.
+    cacheGenRef.current += 1
   }
 
   useEffect(() => {
@@ -134,9 +155,7 @@ export function useGlobalHotkeys({
       try {
         let combo = comboCacheRef.current.get(profile.comboPath)
         if (!combo) {
-          const content = await invoke<string>("read_file", { path: profile.comboPath })
-          combo = importComboFromString(content)
-          comboCacheRef.current.set(profile.comboPath, combo)
+          combo = await readComboFresh(profile.comboPath)
         }
         // A newer press superseded this one while we were loading.
         if (token !== seqRef.current) return

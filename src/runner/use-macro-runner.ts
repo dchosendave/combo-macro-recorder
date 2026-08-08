@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { toast } from "sonner"
+import type { AutoStopConfig } from "@/shared/types"
 import type {
   PotionsRunConfig,
   RunnerInputs,
@@ -13,6 +14,8 @@ type UseMacroRunnerArgs = {
   potionsConfig: PotionsRunConfig
   skillsCanRun: boolean
   skillsConfig: SkillsRunConfig
+  /** Auto-stop-on-focus-loss config, forwarded verbatim to the backend. */
+  autoStop: AutoStopConfig
   onStart?: () => void
   onStop?: () => void
 }
@@ -28,6 +31,7 @@ export function useMacroRunner({
   potionsConfig,
   skillsCanRun,
   skillsConfig,
+  autoStop,
   onStart,
   onStop,
 }: UseMacroRunnerArgs) {
@@ -54,6 +58,9 @@ export function useMacroRunner({
   const skillsConfigRef = useRef(skillsConfig)
   skillsConfigRef.current = skillsConfig
 
+  const autoStopRef = useRef(autoStop)
+  autoStopRef.current = autoStop
+
   const onStartRef = useRef(onStart)
   onStartRef.current = onStart
   const onStopRef = useRef(onStop)
@@ -71,7 +78,7 @@ export function useMacroRunner({
       return
     }
 
-    invoke("start_combo", { potions, skills }).catch((e) => {
+    invoke("start_combo", { potions, skills, autoStop: autoStopRef.current }).catch((e) => {
       setPotionsRunning(false)
       setSkillsRunning(false)
       onStopRef.current?.()
@@ -144,9 +151,22 @@ export function useMacroRunner({
       },
     )
 
+    const unlistenAutoStopped = listen<{ reason: string }>(
+      "macro-auto-stopped",
+      () => {
+        // Backend already stopped both channels — just mirror the state and
+        // run the same teardown as a manual stop (exit compact, clear profile).
+        setPotionsRunning(false)
+        setSkillsRunning(false)
+        onStopRef.current?.()
+        toast.info("Stopped: game window lost focus")
+      },
+    )
+
     return () => {
       unlistenActivation.then((fn) => fn())
       unlistenFinished.then((fn) => fn())
+      unlistenAutoStopped.then((fn) => fn())
     }
   }, [])
 
