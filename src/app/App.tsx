@@ -5,6 +5,7 @@ import { SidebarInset, SidebarProvider } from "@/shared/components/ui/sidebar"
 import { AppHeader } from "@/app/app-header"
 import { AppSidebar } from "@/app/app-sidebar"
 import { TitleBar } from "@/app/title-bar"
+import { HelpDialog } from "@/app/help-dialog"
 import { KeysTab } from "@/potions/keys-tab"
 import { SkillsTab } from "@/skills/skills-tab"
 import { HotkeysTab } from "@/hotkeys/hotkeys-tab"
@@ -12,6 +13,7 @@ import { SettingsTab } from "@/settings/settings-tab"
 import { CompactOverlay } from "@/runner/compact-overlay"
 import { StartupDialog } from "@/combo-file/startup-dialog"
 import { ConfirmDiscardDialog } from "@/combo-file/confirm-discard-dialog"
+import { RecoverComboDialog } from "@/combo-file/recover-combo-dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +27,7 @@ import {
 import { useSettings } from "@/app/use-settings"
 import { useWindowFit } from "@/app/use-window-fit"
 import { useMacroRunner } from "@/runner/use-macro-runner"
+import { toRunnerInputs } from "@/runner/runner-inputs"
 import { useCompactMode } from "@/runner/use-compact-mode"
 import { useComboFile } from "@/combo-file/use-combo-file"
 import { useRecentFiles } from "@/combo-file/use-recent-files"
@@ -36,6 +39,7 @@ import type { AutoStopConfig } from "@/shared/types"
 import "./App.css"
 
 const AUTO_STOP_KEY = "combo-macro-auto-stop"
+const EMERGENCY_HOTKEY_KEY = "combo-macro-emergency-hotkey"
 
 function App() {
   const settings = useSettings()
@@ -43,6 +47,14 @@ function App() {
   useWindowFit()
 
   const runningProfileIdRef = useRef<string | null>(null)
+  const [emergencyHotkey, setEmergencyHotkey] = useState(
+    () => localStorage.getItem(EMERGENCY_HOTKEY_KEY) ?? "",
+  )
+  const updateEmergencyHotkey = useCallback((value: string) => {
+    setEmergencyHotkey(value)
+    if (value) localStorage.setItem(EMERGENCY_HOTKEY_KEY, value)
+    else localStorage.removeItem(EMERGENCY_HOTKEY_KEY)
+  }, [])
 
   // Auto-stop-on-focus-loss is an app-level pref (like always-on-top), owned
   // here so the runner hook and the Settings tab share one source.
@@ -76,6 +88,8 @@ function App() {
     anyRunning,
     elapsed,
     totalCycles,
+    activeSkillStepIndex,
+    lastStopReason,
     toggleRunning,
     startCombo,
     stopAll,
@@ -94,9 +108,15 @@ function App() {
     [settings.buildSettings],
   )
 
-  const { clearCachedCombo } = useGlobalHotkeys({
+  const { clearCachedCombo, registrationStatus, registrationError, unavailablePaths } = useGlobalHotkeys({
     hotkeys: settings.hotkeys,
+    emergencyHotkey,
+    onEmergencyStop: () => {
+      void stopAll("emergency")
+      window.dispatchEvent(new Event("macro-emergency-stop"))
+    },
     toggleRunning,
+    startCurrentCombo: () => startCombo(toRunnerInputs(getCombo())),
     startCombo,
     stopAll,
     applyCombo: settings.applyCombo,
@@ -114,12 +134,16 @@ function App() {
     newCombo,
     isDirty,
     isProcessing,
+    lastSavedAt,
     pendingAction,
+    pendingRecovery,
     requestOpen,
     requestNew,
     requestOpenPath,
     confirmDiscard,
     cancelDiscard,
+    confirmRecovery,
+    cancelRecovery,
     tryAutoLoad,
   } = useComboFile({
     getCombo,
@@ -135,6 +159,7 @@ function App() {
   const { isFirstRun, markTutorialSeen } = useFirstRun()
   const [showStartup, setShowStartup] = useState(isFirstRun)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [startupChecked, setStartupChecked] = useState(false)
 
   useEffect(() => {
@@ -225,6 +250,7 @@ function App() {
         hotkey={codeToLabel(settings.hotkey)}
         profileName={runningProfileName}
         onStop={() => toggleRunning()}
+        onExpand={() => { void exitCompact() }}
       />
     )
   }
@@ -241,16 +267,19 @@ function App() {
             setActiveTab("combo")
             setInnerTab(tab)
           }}
+          onOpenHelp={() => setShowHelp(true)}
         />
-        <SidebarInset className="min-h-0 gap-4 p-4">
+        <SidebarInset className="min-h-0 min-w-0 overflow-hidden gap-4 p-4">
         <AppHeader
           running={anyRunning}
           elapsed={elapsed}
           fileName={currentFilePath}
           isDirty={isDirty}
           isProcessing={isProcessing}
+          lastSavedAt={lastSavedAt}
           canRun={settings.canRun}
           compactMode={compactMode}
+          lastStopReason={lastStopReason}
           onToggleRunning={toggleRunning}
           onReset={handleReset}
           onOpen={requestOpen}
@@ -265,7 +294,7 @@ function App() {
           onSelectComboFile={requestOpenPath}
         />
 
-        <div className="flex min-h-0 flex-1 flex-col animate-in fade-in-0 duration-200">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden animate-in fade-in-0 duration-200">
           {activeTab === "combo" ? (
             innerTab === "potions" ? (
               <KeysTab
@@ -306,22 +335,34 @@ function App() {
                 setRepeatMode={settings.setSkillsRepeatMode}
                 repeatCount={settings.skillsRepeatCount}
                 setRepeatCount={settings.setSkillsRepeatCount}
+                playbackSpeed={settings.playbackSpeed}
+                setPlaybackSpeed={settings.setPlaybackSpeed}
                 repeatError={settings.skillsRepeatError}
+                keyError={settings.skillsKeyError}
+                unmatchedKeydowns={settings.unmatchedKeydowns}
                 onUndo={settings.undoSteps}
                 onRedo={settings.redoSteps}
                 canUndo={settings.canUndoSteps}
                 canRedo={settings.canRedoSteps}
                 onRecordedSteps={settings.onRecordedSteps}
                 hasComboFile={currentFilePath !== null}
+                activeRunStepIndex={activeSkillStepIndex}
+                runnerActive={anyRunning}
               />
             )
           ) : activeTab === "profiles" ? (
             <HotkeysTab
               hotkeys={settings.hotkeys}
+              emergencyHotkey={emergencyHotkey}
+              registrationStatus={registrationStatus}
+              registrationError={registrationError}
+              unavailablePaths={unavailablePaths}
               onAddHotkey={settings.addHotkey}
               onDeleteHotkey={settings.deleteHotkey}
               onUpdateHotkey={settings.updateHotkeyBinding}
               onUpdatePath={settings.updateHotkeyPath}
+              onUpdateMode={settings.updateHotkeyMode}
+              onUpdateCyclePaths={settings.updateHotkeyCyclePaths}
               onMoveHotkeyUp={settings.moveHotkeyUp}
               onMoveHotkeyDown={settings.moveHotkeyDown}
             />
@@ -331,6 +372,9 @@ function App() {
               onSetCompactCorner={setCompactCorner}
               autoStop={autoStop}
               onSetAutoStop={setAutoStop}
+              emergencyHotkey={emergencyHotkey}
+              onSetEmergencyHotkey={updateEmergencyHotkey}
+              profileHotkeys={settings.hotkeys}
             />
           )}
         </div>
@@ -348,6 +392,14 @@ function App() {
       open={pendingAction !== null}
       onConfirm={confirmDiscard}
       onCancel={cancelDiscard}
+    />
+
+    <HelpDialog open={showHelp} onOpenChange={setShowHelp} />
+
+    <RecoverComboDialog
+      open={pendingRecovery !== null}
+      onRecover={() => { void confirmRecovery() }}
+      onCancel={cancelRecovery}
     />
 
     <AlertDialog open={showCloseConfirm}>

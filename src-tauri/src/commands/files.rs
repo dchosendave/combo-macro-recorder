@@ -1,4 +1,7 @@
 use serde::Serialize;
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -7,16 +10,112 @@ pub struct ComboFileEntry {
     pub path: String,
 }
 
-/// Writes raw text to a path (used for saving combo JSON files).
+fn backup_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(".bak");
+    PathBuf::from(name)
+}
+
+fn temp_path(path: &Path, label: &str, attempt: u8) -> Result<PathBuf, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "File has no parent directory".to_string())?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| "File has no name".to_string())?
+        .to_string_lossy();
+    Ok(parent.join(format!(
+        ".{name}.{}.{label}.{attempt}.tmp",
+        std::process::id()
+    )))
+}
+
+fn create_temp(path: &Path, label: &str) -> Result<(PathBuf, File), String> {
+    for attempt in 0..10 {
+        let temp = temp_path(path, label, attempt)?;
+        match OpenOptions::new().write(true).create_new(true).open(&temp) {
+            Ok(file) => return Ok((temp, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Err("Could not create a temporary save file".into())
+}
+
+#[cfg(windows)]
+fn replace_file(source: &Path, destination: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let ok = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if ok == 0 {
+        Err(std::io::Error::last_os_error().to_string())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_file(source: &Path, destination: &Path) -> Result<(), String> {
+    fs::rename(source, destination).map_err(|error| error.to_string())
+}
+
+fn write_replacement(path: &Path, content: &[u8], label: &str) -> Result<(), String> {
+    let (temp, mut file) = create_temp(path, label)?;
+    let result = (|| {
+        file.write_all(content).map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        drop(file);
+        replace_file(&temp, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
+/// Atomically writes combo JSON. Before replacing an existing file, its
+/// previous contents are durably copied to a sibling `.bak` recovery file.
 #[tauri::command]
 pub fn save_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, &content).map_err(|e| e.to_string())
+    let path = Path::new(&path);
+    if path.exists() {
+        let previous = fs::read(path).map_err(|error| error.to_string())?;
+        write_replacement(&backup_path(path), &previous, "backup")?;
+    }
+    write_replacement(path, content.as_bytes(), "save")
 }
 
 /// Reads a file's raw text (used for loading combo JSON files).
 #[tauri::command]
 pub fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn read_backup_file(path: String) -> Result<String, String> {
+    fs::read_to_string(backup_path(Path::new(&path))).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn restore_backup_file(path: String) -> Result<(), String> {
+    let path = Path::new(&path);
+    let content = fs::read(backup_path(path)).map_err(|error| error.to_string())?;
+    write_replacement(path, &content, "restore")
 }
 
 /// Reads a Jitbit `.mcr` file as text. Jitbit exports are usually UTF-8, but
@@ -89,6 +188,28 @@ mod tests {
 
         save_file(path.clone(), r#"{"version":3}"#.into()).unwrap();
         assert_eq!(read_file(path).unwrap(), r#"{"version":3}"#);
+    }
+
+    #[test]
+    fn second_save_keeps_the_previous_contents_as_a_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("combo.json").to_string_lossy().into_owned();
+        save_file(path.clone(), "first".into()).unwrap();
+        save_file(path.clone(), "second".into()).unwrap();
+        assert_eq!(read_file(path.clone()).unwrap(), "second");
+        assert_eq!(read_backup_file(path).unwrap(), "first");
+    }
+
+    #[test]
+    fn restore_keeps_the_good_backup_available() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("combo.json").to_string_lossy().into_owned();
+        save_file(path.clone(), "good".into()).unwrap();
+        save_file(path.clone(), "new".into()).unwrap();
+        fs::write(&path, "damaged").unwrap();
+        restore_backup_file(path.clone()).unwrap();
+        assert_eq!(read_file(path.clone()).unwrap(), "good");
+        assert_eq!(read_backup_file(path).unwrap(), "good");
     }
 
     #[test]
@@ -197,8 +318,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let dir_path = dir.path().to_string_lossy().into_owned();
 
-        assert!(read_file(dir_path.clone()).is_err(), "reading a directory must fail");
-        assert!(save_file(dir_path, "{}".into()).is_err(), "writing over a directory must fail");
+        assert!(
+            read_file(dir_path.clone()).is_err(),
+            "reading a directory must fail"
+        );
+        assert!(
+            save_file(dir_path, "{}".into()).is_err(),
+            "writing over a directory must fail"
+        );
     }
 
     #[test]
@@ -218,8 +345,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         // A lone UTF-16 surrogate makes the name non-UTF-8; it must be skipped
         // without panicking.
-        let weird: std::ffi::OsString =
-            std::ffi::OsString::from_wide(&[0x0063, 0x006F, 0x006D, 0x0062, 0x006F, 0xD800, 0x002E, 0x006A, 0x0073, 0x006F, 0x006E]); // "combo\u{D800}.json"
+        let weird: std::ffi::OsString = std::ffi::OsString::from_wide(&[
+            0x0063, 0x006F, 0x006D, 0x0062, 0x006F, 0xD800, 0x002E, 0x006A, 0x0073, 0x006F, 0x006E,
+        ]); // "combo\u{D800}.json"
         std::fs::write(dir.path().join(weird), "{}").unwrap();
         std::fs::write(dir.path().join("good.json"), "{}").unwrap();
 

@@ -75,6 +75,18 @@ describe("useHotkeySettings", () => {
     expect(result.current.hotkeys[1]).toEqual(TWO_BINDINGS[1])
   })
 
+  it("stores the mode and ordered cycle paths", () => {
+    const { result } = renderHook(() => useHotkeySettings(ONE_BINDING))
+    act(() => {
+      result.current.updateHotkeyMode("h1", "cycle")
+      result.current.updateHotkeyCyclePaths("h1", ["a.json", "b.json"])
+    })
+    expect(result.current.hotkeys[0]).toMatchObject({
+      mode: "cycle",
+      comboPaths: ["a.json", "b.json"],
+    })
+  })
+
   it("hotkey is the first binding's hotkey, falling back to F5 when empty", () => {
     const { result } = renderHook(() => useHotkeySettings(TWO_BINDINGS))
     expect(result.current.hotkey).toBe("Control+F5")

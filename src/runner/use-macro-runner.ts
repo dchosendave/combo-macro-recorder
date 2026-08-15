@@ -20,6 +20,20 @@ type UseMacroRunnerArgs = {
   onStop?: () => void
 }
 
+type RunnerStatus = {
+  sessionId: number
+  potionsRunning: boolean
+  skillsRunning: boolean
+}
+
+export type RunStopReason =
+  | "manual"
+  | "emergency"
+  | "repeat-complete"
+  | "focus-lost"
+  | "profile-switch"
+  | "startup-failure"
+
 /**
  * Drives the backend runner: start/stop/toggle combos via Tauri commands and
  * mirrors running state from the `macro-activation` / `macro-finished` events.
@@ -40,6 +54,10 @@ export function useMacroRunner({
   const [elapsed, setElapsed] = useState(0)
   const [potionsCycles, setPotionsCycles] = useState(0)
   const [skillsCycles, setSkillsCycles] = useState(0)
+  const [sessionId, setSessionId] = useState(0)
+  const [commandPending, setCommandPending] = useState(false)
+  const [skillStepEvent, setSkillStepEvent] = useState<{ sessionId: number; stepIndex: number } | null>(null)
+  const [lastStopReason, setLastStopReason] = useState<RunStopReason | null>(null)
 
   const anyRunning = potionsRunning || skillsRunning
 
@@ -66,35 +84,80 @@ export function useMacroRunner({
   const onStopRef = useRef(onStop)
   onStopRef.current = onStop
 
+  // Tauri commands may execute concurrently. Serializing them here preserves
+  // user intent for rapid start/stop/switch requests.
+  const commandQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const requestSeqRef = useRef(0)
+  const enqueue = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = commandQueueRef.current.then(operation, operation)
+    commandQueueRef.current = result.then(() => undefined, () => undefined)
+    return result
+  }, [])
+
   // Starts an explicit combo atomically (stop both + start the enabled channels
   // in a single backend command). Does not depend on React state having
   // re-rendered, so it is safe to call right after loading a combo file.
-  const startCombo = useCallback((inputs: RunnerInputs) => {
+  const startCombo = useCallback(async (inputs: RunnerInputs) => {
+    const replacesActiveRun = potionsRunningRef.current || skillsRunningRef.current
     const potions = inputs.potionsCanRun ? inputs.potionsConfig : null
     const skills = inputs.skillsCanRun ? inputs.skillsConfig : null
 
     if (!potions && !skills) {
       toast.warning("Enable at least one channel first")
-      return
+      return false
     }
 
-    invoke("start_combo", { potions, skills, autoStop: autoStopRef.current }).catch((e) => {
+    const request = ++requestSeqRef.current
+    setCommandPending(true)
+    try {
+      const status = await enqueue(() => invoke<RunnerStatus>("start_combo", {
+        potions,
+        skills,
+        autoStop: autoStopRef.current,
+      }))
+      if (request !== requestSeqRef.current) return false
+      setSessionId(status.sessionId)
+      setSkillStepEvent(null)
+      setPotionsRunning(status.potionsRunning)
+      setSkillsRunning(status.skillsRunning)
+      if (replacesActiveRun) setLastStopReason("profile-switch")
+      if (status.potionsRunning || status.skillsRunning) onStartRef.current?.()
+      return status.potionsRunning || status.skillsRunning
+    } catch (e) {
+      if (request !== requestSeqRef.current) return false
+      setSessionId(0)
       setPotionsRunning(false)
       setSkillsRunning(false)
       onStopRef.current?.()
+      setLastStopReason("startup-failure")
       toast.error(`Failed to start macro: ${e}`)
-    })
-    setPotionsRunning(!!potions)
-    setSkillsRunning(!!skills)
-    onStartRef.current?.()
-  }, [])
+      return false
+    } finally {
+      if (request === requestSeqRef.current) setCommandPending(false)
+    }
+  }, [enqueue])
 
-  const stopAll = useCallback(() => {
-    invoke("stop_all")
-    setPotionsRunning(false)
-    setSkillsRunning(false)
-    onStopRef.current?.()
-  }, [])
+  const stopAll = useCallback(async (reason: RunStopReason = "manual") => {
+    const request = ++requestSeqRef.current
+    setCommandPending(true)
+    try {
+      const status = await enqueue(() => invoke<RunnerStatus>("stop_all"))
+      if (request !== requestSeqRef.current) return false
+      setSessionId(status.sessionId)
+      setSkillStepEvent(null)
+      setPotionsRunning(status.potionsRunning)
+      setSkillsRunning(status.skillsRunning)
+      setLastStopReason(reason)
+      onStopRef.current?.()
+      return true
+    } catch (e) {
+      if (request !== requestSeqRef.current) return false
+      toast.error(`Failed to stop macro: ${e}`)
+      return false
+    } finally {
+      if (request === requestSeqRef.current) setCommandPending(false)
+    }
+  }, [enqueue])
 
   // Toggle for the current UI combo (used by the on-screen STOP and by hotkeys
   // that have no combo file attached). The live config refs already reflect the
@@ -133,7 +196,12 @@ export function useMacroRunner({
       },
     )
 
-    const unlistenFinished = listen<{ channel: string }>(
+    const unlistenStep = listen<{ sessionId: number; stepIndex: number }>(
+      "macro-step",
+      (event) => setSkillStepEvent(event.payload),
+    )
+
+    const unlistenFinished = listen<{ channel: string; reason?: "repeat-complete" }>(
       "macro-finished",
       (event) => {
         if (event.payload.channel === "potions") {
@@ -141,6 +209,7 @@ export function useMacroRunner({
         } else if (event.payload.channel === "skills") {
           setSkillsRunning(false)
         }
+        setLastStopReason(event.payload.reason ?? "repeat-complete")
 
         if (
           (event.payload.channel === "potions" && !skillsRunningRef.current) ||
@@ -158,6 +227,7 @@ export function useMacroRunner({
         // run the same teardown as a manual stop (exit compact, clear profile).
         setPotionsRunning(false)
         setSkillsRunning(false)
+        setLastStopReason("focus-lost")
         onStopRef.current?.()
         toast.info("Stopped: game window lost focus")
       },
@@ -165,18 +235,36 @@ export function useMacroRunner({
 
     return () => {
       unlistenActivation.then((fn) => fn())
+      unlistenStep.then((fn) => fn())
       unlistenFinished.then((fn) => fn())
       unlistenAutoStopped.then((fn) => fn())
     }
   }, [])
 
+  useEffect(() => {
+    invoke<RunnerStatus>("get_runner_status")
+      .then((status) => {
+        if (!status) return
+        setSessionId(status.sessionId)
+        setPotionsRunning(status.potionsRunning)
+        setSkillsRunning(status.skillsRunning)
+      })
+      .catch(() => {})
+  }, [])
+
   return {
     potionsRunning,
     skillsRunning,
+    sessionId,
+    commandPending,
     anyRunning,
     elapsed,
     potionsCycles,
     skillsCycles,
+    activeSkillStepIndex: skillsRunning && skillStepEvent?.sessionId === sessionId
+      ? skillStepEvent.stepIndex
+      : null,
+    lastStopReason,
     totalCycles: potionsCycles + skillsCycles,
     toggleRunning,
     startCombo,

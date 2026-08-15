@@ -60,6 +60,7 @@ describe("useComboFile", () => {
     })
     expect(onSave).toHaveBeenCalledWith(PATH)
     expect(hook.result.current.isDirty).toBe(false)
+    expect(hook.result.current.lastSavedAt).toEqual(expect.any(Number))
 
     // Baseline is the saved string: the same content is not dirty on re-render.
     rerender()
@@ -167,6 +168,51 @@ describe("useComboFile", () => {
     expect(applyCombo).not.toHaveBeenCalled()
     expect(hook.result.current.isProcessing).toBe(false)
     expect(hook.result.current.currentFilePath).toBeNull()
+  })
+
+  it("offers and restores a valid backup when the primary combo is damaged", async () => {
+    const onOpened = vi.fn()
+    const { applyCombo, hook } = setup({ onOpened })
+    invokeMock
+      .mockResolvedValueOnce("damaged")
+      .mockResolvedValueOnce(OPENED_CONTENT)
+      .mockResolvedValueOnce(undefined)
+
+    await act(async () => {
+      await hook.result.current.openPath(PATH)
+    })
+
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "read_backup_file", { path: PATH })
+    expect(hook.result.current.pendingRecovery).toEqual({
+      path: PATH,
+      combo: expect.objectContaining({ potions: expect.objectContaining({ delayMs: "150" }) }),
+    })
+    expect(applyCombo).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await hook.result.current.confirmRecovery()
+    })
+
+    expect(invokeMock).toHaveBeenLastCalledWith("restore_backup_file", { path: PATH })
+    expect(applyCombo).toHaveBeenCalled()
+    expect(onOpened).toHaveBeenCalledWith(PATH)
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+    expect(hook.result.current.pendingRecovery).toBeNull()
+    expect(toastMock.success).toHaveBeenCalledWith("Recovered the previous saved version")
+  })
+
+  it("leaves a damaged combo untouched when recovery is cancelled", async () => {
+    const { applyCombo, hook } = setup()
+    invokeMock.mockResolvedValueOnce("damaged").mockResolvedValueOnce(OPENED_CONTENT)
+
+    await act(async () => {
+      await hook.result.current.openPath(PATH)
+    })
+    act(() => hook.result.current.cancelRecovery())
+
+    expect(hook.result.current.pendingRecovery).toBeNull()
+    expect(applyCombo).not.toHaveBeenCalled()
+    expect(invokeMock).not.toHaveBeenCalledWith("restore_backup_file", expect.anything())
   })
 
   it("Ctrl+S saves to the current path when one is set", async () => {

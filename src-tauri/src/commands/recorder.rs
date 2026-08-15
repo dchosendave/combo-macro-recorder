@@ -213,6 +213,63 @@ pub fn stop_recording() -> Result<Vec<RecordedEvent>, String> {
 mod tests {
     use super::*;
 
+    #[repr(C)]
+    #[derive(Default)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+
+    extern "system" {
+        fn GetCurrentProcess() -> isize;
+        fn GetProcessTimes(
+            process: isize,
+            creation: *mut FileTime,
+            exit: *mut FileTime,
+            kernel: *mut FileTime,
+            user: *mut FileTime,
+        ) -> i32;
+    }
+
+    fn process_cpu_100ns() -> u64 {
+        let mut creation = FileTime::default();
+        let mut exit = FileTime::default();
+        let mut kernel = FileTime::default();
+        let mut user = FileTime::default();
+        let ok = unsafe {
+            GetProcessTimes(
+                GetCurrentProcess(),
+                &mut creation,
+                &mut exit,
+                &mut kernel,
+                &mut user,
+            )
+        };
+        assert_ne!(ok, 0, "GetProcessTimes failed");
+        let ticks = |time: FileTime| ((time.high as u64) << 32) | time.low as u64;
+        ticks(kernel) + ticks(user)
+    }
+
+    /// Manual diagnostic: run with
+    /// `cargo test recorder_idle_cpu_probe -- --ignored --nocapture --test-threads=1`.
+    #[test]
+    #[ignore = "manual recorder performance probe"]
+    fn recorder_idle_cpu_probe() {
+        let before = process_cpu_100ns();
+        let wall = std::time::Instant::now();
+        start_recording().expect("recording should start");
+        std::thread::sleep(Duration::from_secs(3));
+        stop_recording().expect("recording should stop");
+        let elapsed = wall.elapsed().as_secs_f64();
+        let cpu_seconds = (process_cpu_100ns() - before) as f64 / 10_000_000.0;
+        let cores = std::thread::available_parallelism().map_or(1, |count| count.get());
+        let one_core_percent = cpu_seconds / elapsed * 100.0;
+        let machine_percent = one_core_percent / cores as f64;
+        eprintln!(
+            "recorder idle CPU: {one_core_percent:.2}% of one core, {machine_percent:.2}% of {cores} logical cores"
+        );
+    }
+
     #[test]
     fn vk_to_readable_covers_known_keys() {
         assert_eq!(vk_to_readable(0x41), "A");
@@ -244,11 +301,11 @@ mod tests {
         assert!(should_track(0x70)); // F1
         assert!(should_track(0x20)); // Space
         assert!(should_track(0xBA)); // ;
-        // Modifiers are intentionally skipped.
+                                     // Modifiers are intentionally skipped.
         assert!(!should_track(0x10)); // Shift
         assert!(!should_track(0x11)); // Ctrl
         assert!(!should_track(0x12)); // Alt
-        // Out-of-range / uncommon codes are skipped.
+                                      // Out-of-range / uncommon codes are skipped.
         assert!(!should_track(0x00));
         assert!(!should_track(0x1C));
     }
@@ -260,7 +317,9 @@ mod tests {
         for vk in 0x21..=0x28 {
             assert!(should_track(vk), "0x{vk:X} (PageUp..Down) must be tracked");
         }
-        for vk in [0x2D, 0x2E, 0x60, 0x69, 0x70, 0x83, 0xBA, 0xBF, 0xC0, 0xDB, 0xDE] {
+        for vk in [
+            0x2D, 0x2E, 0x60, 0x69, 0x70, 0x83, 0xBA, 0xBF, 0xC0, 0xDB, 0xDE,
+        ] {
             assert!(should_track(vk), "0x{vk:X} must be tracked");
         }
         // Just outside the tracked ranges.
@@ -295,10 +354,7 @@ mod tests {
     #[test]
     fn recording_lifecycle_starts_once_and_stops_with_events() {
         // The RECORDING static is per test binary; no other test touches it.
-        assert!(
-            stop_recording().is_err(),
-            "stop while inactive must error"
-        );
+        assert!(stop_recording().is_err(), "stop while inactive must error");
 
         start_recording().expect("recording should start");
         assert!(start_recording().is_err(), "double-start must error");
@@ -307,7 +363,10 @@ mod tests {
         let events = stop_recording().expect("recording should stop");
 
         for e in &events {
-            assert!(!e.key.is_empty(), "recorded events must carry a readable key");
+            assert!(
+                !e.key.is_empty(),
+                "recorded events must carry a readable key"
+            );
             assert!(
                 e.action == "keydown" || e.action == "keyup",
                 "recorded action must be keydown/keyup"
@@ -315,7 +374,9 @@ mod tests {
         }
         // Timestamps must be monotonic non-decreasing.
         assert!(
-            events.windows(2).all(|w| w[0].timestamp_ms <= w[1].timestamp_ms),
+            events
+                .windows(2)
+                .all(|w| w[0].timestamp_ms <= w[1].timestamp_ms),
             "recorded timestamps must be monotonic"
         );
     }

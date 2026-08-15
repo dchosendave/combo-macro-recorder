@@ -31,7 +31,10 @@ function useAppFlow() {
   const runningProfileIdRef = { current: null as string | null }
   const { clearCachedCombo } = useGlobalHotkeys({
     hotkeys: [PROFILE],
+    emergencyHotkey: "",
+    onEmergencyStop: vi.fn(),
     toggleRunning: vi.fn(),
+    startCurrentCombo: vi.fn(),
     startCombo: vi.fn(),
     stopAll: vi.fn(),
     applyCombo: settings.applyCombo,
@@ -88,7 +91,7 @@ describe("save → run → reload flow", () => {
 
     // Hotkey press loads the file and reflects it in the tabs — must be OFF.
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireTauriEvent("macro-hotkey", { hotkeyId: "p1", state: "pressed" })
     })
     expect(result.current.settings.holdRightClick).toBe(false)
   })

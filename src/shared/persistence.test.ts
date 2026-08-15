@@ -43,7 +43,7 @@ describe("loadHotkeys", () => {
       }),
     )
     expect(loadHotkeys()).toEqual([
-      { id: "a", name: "N", hotkey: "F6", comboPath: "/x.json" },
+      { id: "a", name: "N", hotkey: "F6", comboPath: "/x.json", mode: "toggle" },
     ])
   })
 
@@ -105,7 +105,7 @@ describe("saveHotkeys / clearHotkeys", () => {
       { id: "b", name: "M", hotkey: "F7", comboPath: "" },
     ]
     saveHotkeys(hotkeys)
-    expect(loadHotkeys()).toEqual(hotkeys)
+    expect(loadHotkeys()).toEqual(hotkeys.map((binding) => ({ ...binding, mode: "toggle" })))
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")).toEqual({
       version: 3,
       hotkeys,

@@ -1,6 +1,7 @@
 import { Button } from "@/shared/components/ui/button"
 import { Kbd } from "@/shared/components/ui/kbd"
 import { formatElapsed } from "@/shared/format"
+import { Maximize2 } from "lucide-react"
 
 type CompactOverlayProps = {
   elapsed: number
@@ -10,6 +11,7 @@ type CompactOverlayProps = {
   hotkey: string
   profileName: string | null
   onStop: () => void
+  onExpand: () => void
 }
 
 export function CompactOverlay({
@@ -20,6 +22,7 @@ export function CompactOverlay({
   hotkey,
   profileName,
   onStop,
+  onExpand,
 }: CompactOverlayProps) {
   return (
     <div className="flex h-screen items-center gap-3 px-3">
@@ -51,6 +54,10 @@ export function CompactOverlay({
       </div>
 
       <div className="flex-1" />
+
+      <Button variant="ghost" size="icon-xs" onClick={onExpand} aria-label="Expand editor">
+        <Maximize2 className="size-3.5" />
+      </Button>
 
       <Button
         variant="destructive"

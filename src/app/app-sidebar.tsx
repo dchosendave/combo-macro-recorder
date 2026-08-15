@@ -1,7 +1,8 @@
-import { FlaskConical, HandFist, Keyboard, Settings, Zap } from "lucide-react"
+import { CircleHelp, FlaskConical, HandFist, Keyboard, Settings, Zap } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarGroup,
   SidebarGroupContent,
@@ -17,9 +18,16 @@ type AppSidebarProps = {
   innerTab: "potions" | "skills"
   onSelectTab: (tab: "combo" | "profiles" | "settings") => void
   onSelectInnerTab: (tab: "potions" | "skills") => void
+  onOpenHelp: () => void
 }
 
-export function AppSidebar({ activeTab, innerTab, onSelectTab, onSelectInnerTab }: AppSidebarProps) {
+export function AppSidebar({
+  activeTab,
+  innerTab,
+  onSelectTab,
+  onSelectInnerTab,
+  onOpenHelp,
+}: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -85,6 +93,16 @@ export function AppSidebar({ activeTab, innerTab, onSelectTab, onSelectInnerTab 
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={onOpenHelp} tooltip="Help & getting started">
+              <CircleHelp />
+              <span>Help</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }

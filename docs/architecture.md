@@ -5,14 +5,18 @@ The frontend holds all editable state (settings, hotkeys, combo files) and talks
 the backend through Tauri commands; the backend owns the two macro loops and injects
 keys with [enigo](https://github.com/enigo-rs/enigo) (Win32 `SendInput` on Windows).
 
+This document explains ownership and flow. Exact command/event/storage contracts live
+in [`contracts.md`](contracts.md); persisted JSON semantics live in
+[`combo-file-format.md`](combo-file-format.md).
+
 ```mermaid
 flowchart LR
     UI[React UI\nsrc/] -->|invoke| CMD[Tauri commands\nsrc-tauri/src/commands]
     CMD --> UI
     CMD --> RUN[Runner\nsrc-tauri/src/runner]
     RUN -->|enigo / SendInput| OS[OS input]
-    GH[global_shortcut plugin] -->|macro-toggle event| UI
-    RUN -->|macro-activation / macro-finished events| UI
+    GH[global_shortcut plugin] -->|macro-hotkey event| UI
+    RUN -->|activation / step / finished events| UI
 ```
 
 ## Component map
@@ -45,7 +49,7 @@ sequenceDiagram
     OS->>GH: user presses hotkey
     GH->>RS: ShortcutState::Pressed
     RS->>RS: lookup hotkey_id in HotkeyState.mappings
-    RS->>FE: emit "macro-toggle" (hotkey_id)
+    RS->>FE: emit "macro-hotkey" (hotkey id + pressed/released)
 
     alt profile has no combo file
         FE->>FE: toggleRunning() → current UI combo
@@ -81,7 +85,7 @@ sequenceDiagram
         RUN->>OS: SendInput press → sleep_precise(delay) → release
         RUN-->>FE: macro-activation {channel, cycle}
         opt repeat mode = count and count reached
-            RUN-->>FE: macro-finished {channel, cycle}
+            RUN-->>FE: macro-finished {channel, cycle, reason: repeat-complete}
             RUN->>RUN: running = false, release keys, thread exits
         end
     end
@@ -118,10 +122,13 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 
 | Command | Args | Returns | Purpose |
 |---|---|---|---|
-| `start_combo` | `potions: PotionConfig \| null`, `skills: SkillConfig \| null`, `autoStop: AutoStopConfig \| null` | `()` | Atomically stop both channels, start the provided ones (`null` = leave stopped); spawns the focus monitor when `autoStop` is active |
-| `stop_all` | — | `()` | Stop both channels under `switch_lock` |
-| `save_file` | `path`, `content` | `()` | Write combo JSON (`fs::write`) |
+| `start_combo` | `potions: PotionConfig \| null`, `skills: SkillConfig \| null`, `autoStop: AutoStopConfig \| null` | `RunnerStatus` | Atomically stop both channels, start the provided ones, and return authoritative session/channel state |
+| `stop_all` | — | `RunnerStatus` | Stop both channels under `switch_lock` and return authoritative state |
+| `get_runner_status` | — | `RunnerStatus` | Reconcile frontend state with Rust on mount |
+| `save_file` | `path`, `content` | `()` | Atomically replace combo JSON and retain the previous contents as `.bak` |
 | `read_file` | `path` | `string` | Read combo JSON (`fs::read_to_string`) |
+| `read_backup_file` | `path` | `string` | Read the sibling recovery copy |
+| `restore_backup_file` | `path` | `()` | Atomically restore the recovery copy without rotating the damaged primary |
 | `read_jitbit_file` | `path` | `string` | Read `.mcr` text (UTF-8, UTF-16 BOM fallback) |
 | `list_combo_files` | `path` (dir) | `{name, path}[]` | List `.json` files in a directory, case-insensitive sorted (used by the Hotkeys tab file picker) |
 | `set_hotkeys` | `hotkeys: {shortcut, hotkeyId}[]` | `()` | Diff-register global shortcuts; unregisters removed ones. Transactional: a registration failure re-registers the removed keys (best-effort rollback) and returns Err without mutating state |
@@ -137,9 +144,10 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 
 | Event | Direction | Payload | Frequency |
 |---|---|---|---|
-| `macro-toggle` | Rust → frontend | hotkey id string | once per hotkey press |
+| `macro-hotkey` | Rust → frontend | `{hotkeyId, state: "pressed"\|"released"}` | once per global-hotkey transition |
 | `macro-activation` | Rust → frontend | `{channel: "potions"\|"skills", cycle, keys?}` | potions: every **10** cycles (throttled); skills: every cycle |
-| `macro-finished` | Rust → frontend | `{channel, cycle}` | once, when Repeat-N count is reached |
+| `macro-step` | Rust → frontend | `{sessionId, stepIndex}` | skills progress, capped near 60 Hz |
+| `macro-finished` | Rust → frontend | `{channel, cycle, reason: "repeat-complete"}` | once, when Repeat-N count is reached |
 | `macro-auto-stopped` | Rust → frontend | `{reason: "focus-lost"}` | once, when the focus monitor stops a run |
 
 `macro-finished` does **not** fire for manual stops (only Repeat-N completion); the
@@ -154,7 +162,8 @@ teardown as a manual stop (exit compact, clear profile ref), and toasts the reas
   the tabs), `buildSettings` (current state snapshot), and `reset`.
 - **Hotkeys persist to `localStorage`, combos persist to files.** The combo editor's
   dirty state is string-equality against the baseline JSON snapshot taken at open/new/save
-  (`src/combo-file/use-combo-file.ts`).
+  (`src/combo-file/use-combo-file.ts`). `lastSavedAt` is session-only feedback set after
+  the atomic save command resolves; opening or creating a file clears it.
 - `useComboFile` also handles the Ctrl+S shortcut, unsaved-changes confirm dialogs, and
   auto-load of the last combo on startup (`combo-macro-auto-load` flag).
 - Hotkey registration is debounced 50 ms and persistence 300 ms to avoid jank during edits.
@@ -171,6 +180,26 @@ teardown as a manual stop (exit compact, clear profile ref), and toasts the reas
 | `combo-macro-compact-corner` | Compact overlay corner: `auto`/`top-right`/`top-left`/`bottom-right`/`bottom-left` |
 | `combo-macro-recent-files` | `string[]` of recently opened/saved combo paths, most recent first, capped at 8 |
 | `combo-macro-auto-stop` | Auto-stop config `{enabled: boolean, gameProcess: string}` (Settings → Auto-stop) |
+| `combo-macro-emergency-hotkey` | Optional emergency-stop shortcut; absent means unset |
+| `combo-macro-record-countdown` | Recording countdown seconds (`1–60`, default `3`) |
+| `combo-macro-skill-editor-view` | Skills editor view: `list` or `timeline` |
+
+### Reliability and editor additions
+
+- `start_combo`, `stop_all`, and `get_runner_status` expose authoritative runner
+  state with a backend-issued session id. Frontend commands are serialized, and
+  compact mode begins only after Rust confirms startup.
+- Combo saves use a synced sibling temporary file and atomic replacement. The
+  previous version is retained as `<path>.bak`; `read_backup_file` and
+  `restore_backup_file` power the explicit recovery dialog.
+- Hotkey profiles support `toggle`, `hold`, `start`, `stop`, and `cycle` modes.
+  Cycle mode owns an ordered `comboPaths` list and keeps its next index in memory.
+- The shared key vocabulary covers printable characters, navigation keys,
+  F1–F24, and numpad keys. Unsupported keys block running; unmatched KeyDown
+  steps remain runnable with a warning.
+- List and Timeline views share multi-selection, ordered copy/cut/paste, disabled
+  steps, and bulk delay editing. Timeline shows proportional delays, cumulative
+  timestamps, effective duration, and session-safe playback progress.
 
 ## Combo file format
 
@@ -178,7 +207,7 @@ Combos are versioned JSON files (open/save via the file dialogs):
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "potions": { "enabled": true, "keys": { "q": true, "w": true, "e": false, "r": false },
                "customDelay": true, "delayMs": "150", "repeatMode": "count", "repeatCount": "5" },
   "skills": { "enabled": true, "holdRightClick": false, "labelStyle": "abbreviation",
@@ -189,7 +218,7 @@ Combos are versioned JSON files (open/save via the file dialogs):
 }
 ```
 
-- `version: 2` files are accepted too; import **merges parsed values over defaults**, so
+- `version: 2` and `version: 3` files are accepted too; import **merges parsed values over defaults**, so
   missing/unknown fields degrade gracefully. Malformed `potions`/`skills` values
   (string, number, `null`) also degrade to defaults via `asRecord` — they can never
   crash or leak spread garbage. Older/unknown versions throw
@@ -197,6 +226,8 @@ Combos are versioned JSON files (open/save via the file dialogs):
 - `delayMs`, `repeatCount`, and step `ms` are strings in the file (input-friendly);
   the backend receives numbers via `toRunnerInputs`.
 - `SkillStep.id` is a frontend-only React key (uuid), never serialized to the backend.
+- Skill steps may have `disabled: true`; disabled steps remain editable but are omitted from validation and runner inputs.
+- `skills.playbackSpeed` is clamped to `0.1–4`; runner inputs scale delay copies while saved source delays remain unchanged.
 
 ### Validation single source (do not duplicate!)
 
@@ -226,7 +257,8 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
   order, wait `delayMs`, release. Emits `macro-activation` every 10 cycles (throttle).
 - **Skills loop** (`skills.rs`): optionally holds right-click for the whole run, then
   executes the step list (`delay`/`keydown`/`keyup`). Emits `macro-activation` every cycle.
-- Repeat-N mode emits `macro-finished` and stops the channel when the count is reached.
+- Repeat-N mode emits `macro-finished` with `reason: "repeat-complete"` and stops the channel when the count is reached.
+- Skills emit session-tagged `macro-step` progress at no more than about 60 Hz. The editor ignores other sessions and highlights the corresponding enabled source step.
 - **Focus monitor** (`focus.rs`): when `autoStop` is active, `start_combo_inner` spawns a
   monitor thread that polls `GetForegroundWindow()` every 250 ms and compares the owning
   PID against the configured game process name (`CreateToolhelp32Snapshot`). Once the game
@@ -263,15 +295,17 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
 
 ## Recording (`src-tauri/src/commands/recorder.rs`)
 
-- A high-priority thread polls `GetAsyncKeyState` for all VK codes **every 1 ms**,
-  edge-detecting transitions into keydown/keyup events — system-wide, works regardless
-  of which window has focus.
+- A high-priority thread scans the filtered supported virtual-key vocabulary with
+  `GetAsyncKeyState`, then requests a 1 ms sleep between scans. It edge-detects
+  transitions system-wide. Scheduler timing means the requested sleep does not
+  guarantee 1 ms capture precision.
 - Modifier keys (Shift/Ctrl/Alt) are intentionally skipped (`should_track`).
 - Timestamps are milliseconds elapsed since recording start, assigned per poll batch.
 - `useRecorder` (`src/recorder/use-recorder.ts`) stops the recording and converts the
   events into the step list; the conversion (`eventsToSteps` + the `RecordedEvent`
   type) lives in `src/recorder/events-to-steps.ts` — a delay step is inserted before
   each event whose timestamp delta is > 0.
+- `docs/recorder-reliability.md` contains the ignored Windows CPU probe and physical-key capture matrix used before changing the polling architecture.
 
 ## Jitbit import (`src/skills/parsers.ts`)
 

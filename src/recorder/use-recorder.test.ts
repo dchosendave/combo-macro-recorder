@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect, beforeEach, vi } from "vitest"
 import { act, renderHook } from "@testing-library/react"
 import { invokeMock, toastMock } from "@/test/tauri-utils"
 import { useRecorder } from "./use-recorder"
@@ -23,7 +23,7 @@ beforeEach(() => {
 
 describe("useRecorder", () => {
   it("startRecording invokes start_recording and flips isRecording", async () => {
-    const { result } = renderHook(() => useRecorder())
+    const { result } = renderHook(() => useRecorder(0))
 
     await act(async () => {
       await result.current.startRecording()
@@ -35,7 +35,7 @@ describe("useRecorder", () => {
   })
 
   it("startRecording reports failure and stays stopped when invoke rejects", async () => {
-    const { result } = renderHook(() => useRecorder())
+    const { result } = renderHook(() => useRecorder(0))
     invokeMock.mockRejectedValueOnce(new Error("boom"))
 
     await act(async () => {
@@ -47,7 +47,7 @@ describe("useRecorder", () => {
   })
 
   it("stopRecording converts recorded events into steps", async () => {
-    const { result } = renderHook(() => useRecorder())
+    const { result } = renderHook(() => useRecorder(0))
     invokeMock.mockResolvedValueOnce(EVENTS as never)
 
     let steps: SkillStep[] | null = null
@@ -67,7 +67,7 @@ describe("useRecorder", () => {
   })
 
   it("stopRecording with no events returns null and warns", async () => {
-    const { result } = renderHook(() => useRecorder())
+    const { result } = renderHook(() => useRecorder(0))
     invokeMock.mockResolvedValueOnce([] as never)
 
     let steps: SkillStep[] | null = null
@@ -81,7 +81,7 @@ describe("useRecorder", () => {
   })
 
   it("stopRecording reports failure and returns null when invoke rejects", async () => {
-    const { result } = renderHook(() => useRecorder())
+    const { result } = renderHook(() => useRecorder(0))
     invokeMock.mockRejectedValueOnce(new Error("boom"))
 
     let steps: SkillStep[] | null = null
@@ -92,5 +92,36 @@ describe("useRecorder", () => {
     expect(steps).toBeNull()
     expect(toastMock.error).toHaveBeenCalledWith("Failed to stop recording: Error: boom")
     expect(result.current.isRecording).toBe(false)
+  })
+
+  it("cancels an active recording on emergency stop", async () => {
+    const { result } = renderHook(() => useRecorder(0))
+    await act(async () => { await result.current.startRecording() })
+    invokeMock.mockClear()
+
+    act(() => window.dispatchEvent(new Event("macro-emergency-stop")))
+
+    expect(result.current.isRecording).toBe(false)
+    expect(invokeMock).toHaveBeenCalledWith("stop_recording")
+    expect(toastMock.info).toHaveBeenCalledWith("Recording cancelled by emergency stop")
+  })
+
+  it("counts down before invoking the backend and can be cancelled", async () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useRecorder(3))
+
+    let start!: Promise<void>
+    act(() => { start = result.current.startRecording() })
+    expect(result.current.countdown).toBe(3)
+    expect(invokeMock).not.toHaveBeenCalledWith("start_recording")
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(result.current.countdown).toBe(2)
+    act(() => result.current.cancelCountdown())
+    await act(async () => { await start })
+
+    expect(result.current.countdown).toBeNull()
+    expect(result.current.isRecording).toBe(false)
+    expect(invokeMock).not.toHaveBeenCalledWith("start_recording")
   })
 })

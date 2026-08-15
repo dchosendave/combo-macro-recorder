@@ -9,6 +9,7 @@ import { toRunnerInputs } from "@/runner/runner-inputs"
 import type { CurrentCombo, HotkeyBinding } from "@/shared/types"
 
 const COMBO_PATH = "C:\\combos\\a.json"
+const COMBO_PATH_2 = "C:\\combos\\b.json"
 
 const PROFILE_P1: HotkeyBinding = { id: "p1", name: "P1", hotkey: "Control+F5", comboPath: COMBO_PATH }
 const PROFILE_P2: HotkeyBinding = { id: "p2", name: "P2", hotkey: "F6", comboPath: "" }
@@ -39,6 +40,9 @@ const COMBO_2 = combo("w")
 
 type Deferred = { resolve: (value: string) => void; promise: Promise<string> }
 
+const fireHotkey = (hotkeyId: string, state: "pressed" | "released" = "pressed") =>
+  fireTauriEvent("macro-hotkey", { hotkeyId, state })
+
 function deferredReads(): { reads: Deferred[]; mock: (cmd: string) => Promise<unknown> } {
   const reads: Deferred[] = []
   const mock = (cmd: string): Promise<unknown> => {
@@ -59,6 +63,7 @@ function renderHotkeys(initial?: Partial<Parameters<typeof useGlobalHotkeys>[0]>
   const ref: MutableRefObject<string | null> = { current: null }
   const spies = {
     toggleRunning: vi.fn(),
+    startCurrentCombo: vi.fn().mockResolvedValue(true),
     startCombo: vi.fn(),
     stopAll: vi.fn(),
     applyCombo: vi.fn(),
@@ -67,6 +72,8 @@ function renderHotkeys(initial?: Partial<Parameters<typeof useGlobalHotkeys>[0]>
   // render callback captures this object).
   const props = {
     hotkeys: [PROFILE_P1, PROFILE_P2],
+    emergencyHotkey: "",
+    onEmergencyStop: vi.fn(),
     ...spies,
     runningProfileIdRef: ref,
     ...initial,
@@ -111,6 +118,24 @@ describe("useGlobalHotkeys", () => {
     })
   })
 
+  it("registers and handles an opt-in emergency shortcut", async () => {
+    vi.useFakeTimers()
+    const onEmergencyStop = vi.fn()
+    renderHotkeys({ emergencyHotkey: "Control+Shift+F12", onEmergencyStop })
+    act(() => vi.advanceTimersByTime(50))
+
+    expect(invokeMock).toHaveBeenCalledWith("set_hotkeys", {
+      hotkeys: expect.arrayContaining([
+        { shortcut: "Control+Shift+F12", hotkeyId: "__emergency_stop__" },
+      ]),
+    })
+
+    await act(async () => {
+      await fireHotkey("__emergency_stop__")
+    })
+    expect(onEmergencyStop).toHaveBeenCalledTimes(1)
+  })
+
   it("warns when set_hotkeys rejects", async () => {
     vi.useFakeTimers()
     renderHotkeys()
@@ -136,7 +161,7 @@ describe("useGlobalHotkeys", () => {
     const { toggleRunning } = renderHotkeys()
     invokeMock.mockClear()
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p2")
+      await fireHotkey("p2")
     })
     expect(toggleRunning).toHaveBeenCalledTimes(1)
     expect(invokeMock).not.toHaveBeenCalledWith("read_file", expect.anything())
@@ -149,7 +174,7 @@ describe("useGlobalHotkeys", () => {
     )
     await act(async () => {})
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireHotkey("p1")
     })
     expect(applyCombo).toHaveBeenCalledWith(COMBO_1)
     expect(ref.current).toBe("p1")
@@ -166,11 +191,75 @@ describe("useGlobalHotkeys", () => {
     invokeMock.mockClear()
 
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireHotkey("p1")
     })
     expect(stopAll).toHaveBeenCalledTimes(1)
     expect(ref.current).toBeNull()
     expect(invokeMock).not.toHaveBeenCalledWith("read_file", expect.anything())
+  })
+
+  it("hold mode starts on press and stops that profile on release", async () => {
+    const profile = { ...PROFILE_P2, mode: "hold" as const }
+    const { startCurrentCombo, stopAll, ref } = renderHotkeys({ hotkeys: [profile] })
+
+    await act(async () => { await fireHotkey("p2") })
+    expect(startCurrentCombo).toHaveBeenCalledTimes(1)
+    expect(ref.current).toBe("p2")
+
+    await act(async () => { await fireHotkey("p2", "released") })
+    expect(stopAll).toHaveBeenCalledTimes(1)
+    expect(ref.current).toBeNull()
+  })
+
+  it("start-only ignores repeated presses while its profile is active", async () => {
+    const profile = { ...PROFILE_P2, mode: "start" as const }
+    const { startCurrentCombo } = renderHotkeys({ hotkeys: [profile] })
+    await act(async () => { await fireHotkey("p2"); await fireHotkey("p2") })
+    expect(startCurrentCombo).toHaveBeenCalledTimes(1)
+  })
+
+  it("stop-only stops any active profile without loading its combo", async () => {
+    const profile = { ...PROFILE_P1, mode: "stop" as const }
+    const { stopAll, startCombo, ref } = renderHotkeys({ hotkeys: [profile] })
+    ref.current = "another-profile"
+    invokeMock.mockClear()
+
+    await act(async () => { await fireHotkey("p1") })
+    expect(stopAll).toHaveBeenCalledTimes(1)
+    expect(startCombo).not.toHaveBeenCalled()
+    expect(invokeMock).not.toHaveBeenCalledWith("read_file", expect.anything())
+    expect(ref.current).toBeNull()
+  })
+
+  it("cycle mode starts ordered combos and wraps to the beginning", async () => {
+    const profile = { ...PROFILE_P1, mode: "cycle" as const, comboPaths: [COMBO_PATH, COMBO_PATH_2] }
+    invokeMock.mockImplementation((cmd, args) => {
+      if (cmd !== "read_file") return Promise.resolve(undefined)
+      return Promise.resolve(exportComboToString((args as { path: string }).path === COMBO_PATH ? COMBO_1 : COMBO_2))
+    })
+    const { applyCombo, startCombo } = renderHotkeys({ hotkeys: [profile] })
+    await act(async () => {})
+
+    await act(async () => { await fireHotkey("p1"); await fireHotkey("p1"); await fireHotkey("p1") })
+
+    expect(applyCombo.mock.calls.map(([value]) => value)).toEqual([COMBO_1, COMBO_2, COMBO_1])
+    expect(startCombo).toHaveBeenCalledTimes(3)
+  })
+
+  it("cycle mode skips an unavailable combo", async () => {
+    const profile = { ...PROFILE_P1, mode: "cycle" as const, comboPaths: [COMBO_PATH, COMBO_PATH_2] }
+    invokeMock.mockImplementation((cmd, args) => {
+      if (cmd !== "read_file") return Promise.resolve(undefined)
+      return (args as { path: string }).path === COMBO_PATH
+        ? Promise.reject(new Error("missing"))
+        : Promise.resolve(exportComboToString(COMBO_2))
+    })
+    const { applyCombo } = renderHotkeys({ hotkeys: [profile] })
+    await act(async () => {})
+    await act(async () => { await fireHotkey("p1") })
+
+    expect(applyCombo).toHaveBeenCalledWith(COMBO_2)
+    expect(toastMock.warning).toHaveBeenCalledWith("Skipped 1 unavailable combo")
   })
 
   it("last press wins when loads race", async () => {
@@ -183,9 +272,9 @@ describe("useGlobalHotkeys", () => {
     expect(reads.length).toBe(1)
 
     // Press 1 starts a slow load; press 2 (fast load) supersedes it.
-    const press1 = fireTauriEvent("macro-toggle", "p1")
+    const press1 = fireHotkey("p1")
     expect(reads.length).toBe(2)
-    const press2 = fireTauriEvent("macro-toggle", "p1")
+    const press2 = fireHotkey("p1")
     expect(reads.length).toBe(3)
 
     await act(async () => {
@@ -218,7 +307,7 @@ describe("useGlobalHotkeys", () => {
     invokeMock.mockClear()
 
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireHotkey("p1")
     })
     expect(invokeMock).not.toHaveBeenCalledWith("read_file", expect.anything())
     expect(applyCombo).toHaveBeenCalledWith(COMBO_1)
@@ -232,7 +321,7 @@ describe("useGlobalHotkeys", () => {
     const { result, applyCombo, ref } = renderHotkeys()
     await act(async () => {})
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireHotkey("p1")
     })
 
     // Press 1 marked the profile running; reset so the next press loads again.
@@ -240,7 +329,7 @@ describe("useGlobalHotkeys", () => {
     invokeMock.mockClear()
     act(() => result.current.clearCachedCombo(COMBO_PATH))
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireHotkey("p1")
     })
     expect(invokeMock).toHaveBeenCalledWith("read_file", { path: COMBO_PATH })
     expect(applyCombo).toHaveBeenCalledTimes(2)
@@ -284,7 +373,7 @@ describe("useGlobalHotkeys", () => {
 
     // The press must apply the FRESH combo — never the stale preload snapshot.
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireHotkey("p1")
     })
     expect(applyCombo).toHaveBeenCalledWith(fresh)
     expect(applyCombo).not.toHaveBeenCalledWith(stale)
@@ -297,7 +386,7 @@ describe("useGlobalHotkeys", () => {
     )
     await act(async () => {})
     await act(async () => {
-      await fireTauriEvent("macro-toggle", "p1")
+      await fireHotkey("p1")
     })
     expect(toastMock.error).toHaveBeenCalledWith("Failed to load P1")
   })

@@ -11,12 +11,17 @@ pub fn set_hard_corners(window: tauri::Window, enabled: bool) -> Result<(), Stri
     {
         use windows_sys::Win32::Foundation::HWND as SysHwnd;
         use windows_sys::Win32::Graphics::Dwm::{
-            DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DEFAULT, DWMWCP_DONOTROUND,
+            DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DEFAULT,
+            DWMWCP_DONOTROUND,
         };
 
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
         // tauri's HWND is the `windows` crate's `HWND(pub *mut c_void)`.
-        let preference: i32 = if enabled { DWMWCP_DONOTROUND } else { DWMWCP_DEFAULT };
+        let preference: i32 = if enabled {
+            DWMWCP_DONOTROUND
+        } else {
+            DWMWCP_DEFAULT
+        };
         // SAFETY: `hwnd` is the live native handle of the calling window and
         // `preference` is a valid i32 for the duration of the call.
         let result = unsafe {

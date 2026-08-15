@@ -30,6 +30,7 @@ import {
 import { formatElapsed } from "@/shared/format"
 import { SidebarTrigger } from "@/shared/components/ui/sidebar"
 import type { ComboFileEntry } from "@/combo-file/use-combo-files"
+import type { RunStopReason } from "@/runner/use-macro-runner"
 
 type AppHeaderProps = {
   running: boolean
@@ -37,8 +38,10 @@ type AppHeaderProps = {
   fileName: string | null
   isDirty: boolean
   isProcessing: boolean
+  lastSavedAt?: number | null
   canRun: boolean
   compactMode: boolean
+  lastStopReason?: RunStopReason | null
   onToggleRunning: () => void
   onReset: () => void
   onOpen: () => void
@@ -59,8 +62,10 @@ export function AppHeader({
   fileName,
   isDirty,
   isProcessing,
+  lastSavedAt = null,
   canRun,
   compactMode,
+  lastStopReason = null,
   onToggleRunning,
   onReset,
   onOpen,
@@ -75,6 +80,14 @@ export function AppHeader({
   onSelectComboFile,
 }: AppHeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
+  const stopReasonLabel: Record<RunStopReason, string> = {
+    manual: "Manual",
+    emergency: "Emergency",
+    "repeat-complete": "Repeat complete",
+    "focus-lost": "Focus lost",
+    "profile-switch": "Profile switched",
+    "startup-failure": "Start failed",
+  }
 
   return (
     <header className="flex items-center justify-between">
@@ -120,21 +133,33 @@ export function AppHeader({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-        {isDirty && (
+        {isDirty ? (
           <Tooltip>
             <TooltipTrigger
               render={
-                <span className="size-1.5 rounded-full bg-amber-400" />
+                <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">Unsaved</Badge>
               }
             />
             <TooltipContent>Unsaved changes</TooltipContent>
           </Tooltip>
-        )}
-        <Badge variant={running ? "default" : "secondary"} className="gap-1.5 min-w-[130px]">
+        ) : lastSavedAt ? (
+          <span className="hidden text-[11px] text-muted-foreground xl:inline" title={new Date(lastSavedAt).toLocaleString()}>
+            Saved {new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          </span>
+        ) : null}
+        <Badge
+          variant={running ? "default" : "secondary"}
+          className="gap-1.5 min-w-[130px]"
+          title={!running && lastStopReason ? `Last result: ${stopReasonLabel[lastStopReason]}` : undefined}
+        >
           <span
             className={`size-2 rounded-full transition-colors duration-300 ${running ? "bg-green-500" : "bg-muted-foreground"}`}
           />
-          {running ? `Running · ${formatElapsed(elapsed)}` : "Stopped"}
+          {running
+            ? `Running · ${formatElapsed(elapsed)}`
+            : lastStopReason
+              ? `Stopped · ${stopReasonLabel[lastStopReason]}`
+              : "Stopped"}
         </Badge>
       </div>
       <div className="flex items-center gap-1">
@@ -160,7 +185,7 @@ export function AppHeader({
             render={
               <Button
                 size="icon"
-                variant="ghost"
+                variant={isDirty ? "secondary" : "ghost"}
                 disabled={isProcessing}
                 aria-label="New file"
                 onClick={onNew}

@@ -65,10 +65,15 @@ impl Default for MonitorTiming {
 /// Spawns the focus monitor for a freshly started combo. The monitor is
 /// self-terminating: it exits when the channels stop or when a newer combo
 /// invalidates it via `monitor_gen`, so no handle needs to be stored.
-pub(crate) fn spawn_focus_monitor<R: Runtime>(config: AutoStopConfig, gen: u64, app: &AppHandle<R>) {
+pub(crate) fn spawn_focus_monitor<R: Runtime>(
+    config: AutoStopConfig,
+    gen: u64,
+    app: &AppHandle<R>,
+) {
     #[cfg(target_os = "windows")]
-    let provider: Arc<dyn ForegroundProvider> =
-        Arc::new(WinForegroundProvider::new(config.game_process.trim().to_string()));
+    let provider: Arc<dyn ForegroundProvider> = Arc::new(WinForegroundProvider::new(
+        config.game_process.trim().to_string(),
+    ));
     #[cfg(not(target_os = "windows"))]
     let provider: Arc<dyn ForegroundProvider> = Arc::new(NoopForegroundProvider);
 
@@ -145,7 +150,9 @@ impl WinForegroundProvider {
 #[cfg(target_os = "windows")]
 impl ForegroundProvider for WinForegroundProvider {
     fn foreground_pid(&self) -> Option<u32> {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetForegroundWindow, GetWindowThreadProcessId,
+        };
 
         let hwnd = unsafe { GetForegroundWindow() };
         if hwnd.is_null() {
@@ -245,7 +252,9 @@ mod tests {
         let handle = app.handle().clone();
         start_combo_inner(
             None, // no auto-stop monitor — tests spawn their own
-            Some(PotionConfig::for_test(true, true, true, true, 100, "loop", 1)),
+            Some(PotionConfig::for_test(
+                true, true, true, true, 100, "loop", 1,
+            )),
             None,
             &handle,
             &app.state::<AppState>(),
@@ -283,7 +292,10 @@ mod tests {
         let _monitor = spawn_focus_monitor_with(fast_timing(), provider, gen, &handle);
 
         std::thread::sleep(Duration::from_millis(200)); // ≫ grace
-        assert!(running(&state), "must not stop before the game was ever focused");
+        assert!(
+            running(&state),
+            "must not stop before the game was ever focused"
+        );
         stop_all_inner(&state);
     }
 
@@ -318,7 +330,10 @@ mod tests {
         // land a moment after the channels report stopped — poll for it.
         let deadline = Instant::now() + Duration::from_secs(5);
         while !auto_stopped.load(Ordering::SeqCst) {
-            assert!(Instant::now() < deadline, "macro-auto-stopped must be emitted");
+            assert!(
+                Instant::now() < deadline,
+                "macro-auto-stopped must be emitted"
+            );
             std::thread::sleep(Duration::from_millis(5));
         }
         // The join consumed both thread handles — no leaked threads.
@@ -388,7 +403,10 @@ mod tests {
         provider.set_foreground(Some(42));
         std::thread::sleep(Duration::from_millis(100)); // ≫ grace total
 
-        assert!(running(&state), "returning to the game must reset the grace timer");
+        assert!(
+            running(&state),
+            "returning to the game must reset the grace timer"
+        );
         stop_all_inner(&state);
     }
 
@@ -463,7 +481,10 @@ mod tests {
         provider.set_foreground(None); // desktop showing (Win+D)
         std::thread::sleep(Duration::from_millis(200));
 
-        assert!(running(&state), "no foreground window must not count as focus loss");
+        assert!(
+            running(&state),
+            "no foreground window must not count as focus loss"
+        );
         stop_all_inner(&state);
     }
 }

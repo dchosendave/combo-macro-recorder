@@ -114,6 +114,52 @@ describe("deriveSkillRun", () => {
     const r = deriveSkillRun(skillConfig({ enabled: true, steps: [{ id: "s1", type: "keydown", key: "a" }], repeatMode: "loop" }))
     expect(r.canRun).toBe(true)
     expect(r.repeatError).toBe(false)
+    expect(r.unmatchedKeydowns).toEqual(["A"])
+  })
+
+  it("omits disabled steps from playback and validation", () => {
+    const r = deriveSkillRun(skillConfig({
+      enabled: true,
+      steps: [
+        { id: "bad", type: "keydown", key: "not-a-key", disabled: true },
+        { id: "down", type: "keydown", key: "A" },
+        { id: "delay", type: "delay", ms: "100", disabled: true },
+        { id: "up", type: "keyup", key: "A" },
+      ],
+    }))
+    expect(r.keyError).toBe(false)
+    expect(r.canRun).toBe(true)
+    expect(r.unmatchedKeydowns).toEqual([])
+    expect(r.config.steps).toEqual([
+      { type: "keydown", key: "A" },
+      { type: "keyup", key: "A" },
+    ])
+  })
+
+  it("cannot run when every keydown is disabled", () => {
+    const r = deriveSkillRun(skillConfig({
+      enabled: true,
+      steps: [{ id: "down", type: "keydown", key: "A", disabled: true }],
+    }))
+    expect(r.canRun).toBe(false)
+    expect(r.config.steps).toEqual([])
+  })
+
+  it("blocks empty or unsupported keys but only warns for an unmatched keydown", () => {
+    const invalid = deriveSkillRun(skillConfig({
+      enabled: true,
+      steps: [{ id: "s1", type: "keydown", key: "not-a-key" }],
+    }))
+    expect(invalid.keyError).toBe(true)
+    expect(invalid.canRun).toBe(false)
+
+    const held = deriveSkillRun(skillConfig({
+      enabled: true,
+      steps: [{ id: "s1", type: "keydown", key: "Space" }],
+    }))
+    expect(held.keyError).toBe(false)
+    expect(held.unmatchedKeydowns).toEqual(["Space"])
+    expect(held.canRun).toBe(true)
   })
 
   it("flags an empty repeat count in count mode", () => {
@@ -125,6 +171,20 @@ describe("deriveSkillRun", () => {
   it("clamps negative delay steps to 0", () => {
     const r = deriveSkillRun(skillConfig({ enabled: true, steps: [{ id: "s1", type: "delay", ms: "-5" }], repeatMode: "loop" }))
     expect(r.config.steps).toEqual([{ type: "delay", ms: 0 }])
+  })
+
+  it("scales runtime delays without changing source steps", () => {
+    const steps = [{ id: "s1", type: "delay" as const, ms: "101" }]
+    const r = deriveSkillRun(skillConfig({ enabled: true, playbackSpeed: "2", steps }))
+    expect(r.config.steps).toEqual([{ type: "delay", ms: 51 }])
+    expect(steps[0].ms).toBe("101")
+  })
+
+  it("clamps playback speed between 0.1x and 4x", () => {
+    const fast = deriveSkillRun(skillConfig({ playbackSpeed: "99", steps: [{ id: "s1", type: "delay", ms: "100" }] }))
+    const slow = deriveSkillRun(skillConfig({ playbackSpeed: "0", steps: [{ id: "s1", type: "delay", ms: "100" }] }))
+    expect(fast.config.steps).toEqual([{ type: "delay", ms: 25 }])
+    expect(slow.config.steps).toEqual([{ type: "delay", ms: 1000 }])
   })
 
   it("treats non-numeric delay steps as 0", () => {

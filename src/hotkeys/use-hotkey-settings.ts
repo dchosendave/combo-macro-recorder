@@ -12,6 +12,8 @@ export function useHotkeySettings(initial: HotkeyBinding[]) {
         name: `Hotkey ${prev.length + 1}`,
         hotkey: "F5",
         comboPath: "",
+        mode: "toggle",
+        comboPaths: [],
       },
     ])
   }, [])
@@ -33,6 +35,14 @@ export function useHotkeySettings(initial: HotkeyBinding[]) {
 
   const updateHotkeyPath = useCallback((id: string, comboPath: string) => {
     setHotkeys((prev) => prev.map((p) => (p.id === id ? { ...p, comboPath } : p)))
+  }, [])
+
+  const updateHotkeyMode = useCallback((id: string, mode: NonNullable<HotkeyBinding["mode"]>) => {
+    setHotkeys((prev) => prev.map((profile) => profile.id === id ? { ...profile, mode } : profile))
+  }, [])
+
+  const updateHotkeyCyclePaths = useCallback((id: string, comboPaths: string[]) => {
+    setHotkeys((prev) => prev.map((profile) => profile.id === id ? { ...profile, comboPaths } : profile))
   }, [])
 
   const moveHotkeyUp = useCallback((id: string) => {
@@ -60,7 +70,7 @@ export function useHotkeySettings(initial: HotkeyBinding[]) {
   return {
     hotkeys, setHotkeys,
     addHotkey, deleteHotkey, renameHotkey,
-    updateHotkeyBinding, updateHotkeyPath,
+    updateHotkeyBinding, updateHotkeyPath, updateHotkeyMode, updateHotkeyCyclePaths,
     moveHotkeyUp, moveHotkeyDown,
     hotkey,
     persisted: hotkeys,

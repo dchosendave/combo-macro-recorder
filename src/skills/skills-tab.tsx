@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { open } from "@tauri-apps/plugin-dialog"
-import { ArrowDown, ArrowUp, Circle, Clock, Copy, FolderOpen, GripVertical, Lock, LockOpen, Square, Trash2, Undo2, Redo2, Wand2 } from "lucide-react"
+import { AlertTriangle, ArrowDown, ArrowUp, Circle, Clock, Copy, FolderOpen, GripVertical, Lock, LockOpen, Square, Trash2, Undo2, Redo2, Wand2 } from "lucide-react"
 import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
 import { Button } from "@/shared/components/ui/button"
+import { Slider } from "@/shared/components/ui/slider"
 import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select"
@@ -38,6 +39,13 @@ import { toast } from "sonner"
 import { type RepeatMode, type SkillStep, type StepLabelStyle } from "@/shared/types"
 import { parseCombo, parseJitbitFile } from "@/skills/parsers"
 import { useRecorder } from "@/recorder/use-recorder"
+import { SkillKeyPicker } from "@/skills/skill-key-picker"
+import { analyzeSkillSteps } from "@/shared/skill-keys"
+import { Alert, AlertDescription, AlertTitle } from "@/shared/components/ui/alert"
+import { adjustSelectedDelays, copySelectedSteps, duplicateSelectedSteps, pasteSkillSteps, reorderSelectedSteps, setSelectedStepsDisabled } from "@/skills/step-selection"
+import { SkillTimeline } from "@/skills/skill-timeline"
+import { StepSelectionInspector } from "@/skills/step-selection-inspector"
+import { normalizePlaybackSpeed } from "@/shared/run-validation"
 
 type SkillsTabProps = {
   enabled: boolean
@@ -60,7 +68,11 @@ type SkillsTabProps = {
   setRepeatMode: (mode: RepeatMode) => void
   repeatCount: string
   setRepeatCount: (value: string) => void
+  playbackSpeed: string
+  setPlaybackSpeed: (value: string) => void
   repeatError: boolean
+  keyError: boolean
+  unmatchedKeydowns: string[]
   onUndo: () => void
   onRedo: () => void
   canUndo: boolean
@@ -68,6 +80,8 @@ type SkillsTabProps = {
   onRecordedSteps?: (steps: SkillStep[]) => void
   /** Whether a combo file is currently open — steers the empty-state hint toward recording/opening when none is. */
   hasComboFile?: boolean
+  activeRunStepIndex?: number | null
+  runnerActive?: boolean
 }
 
 export function SkillsTab({
@@ -91,20 +105,31 @@ export function SkillsTab({
   setRepeatMode,
   repeatCount,
   setRepeatCount,
+  playbackSpeed,
+  setPlaybackSpeed,
   repeatError,
+  keyError,
+  unmatchedKeydowns,
   onUndo,
   onRedo,
   canUndo,
   canRedo,
   onRecordedSteps,
   hasComboFile,
+  activeRunStepIndex = null,
+  runnerActive = false,
 }: SkillsTabProps) {
   const [comboKeys, setComboKeys] = useState("")
   const [comboDelays, setComboDelays] = useState("")
   const [comboOpen, setComboOpen] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [stepClipboard, setStepClipboard] = useState<SkillStep[]>([])
+  const selectionAnchorRef = useRef<string | null>(null)
   const [locked, setLocked] = useState(true)
-  const [selectAll, setSelectAll] = useState(false)
+  const [bulkDelay, setBulkDelay] = useState("10")
+  const [editorView, setEditorView] = useState<"list" | "timeline">(
+    () => localStorage.getItem("combo-macro-skill-editor-view") === "timeline" ? "timeline" : "list",
+  )
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -114,7 +139,84 @@ export function SkillsTab({
   const scrollRef = useRef<HTMLDivElement>(null)
   const justAddedRef = useRef(false)
 
-  const { isRecording, startRecording, stopRecording } = useRecorder()
+  const { isRecording, countdown, startRecording, stopRecording, cancelCountdown } = useRecorder()
+  const invalidStepIds = new Set(analyzeSkillSteps(steps).invalidStepIds)
+  const selectedDelayCount = steps.filter((step) => selectedIds.has(step.id) && step.type === "delay").length
+  const selectedHasEnabledStep = steps.some((step) => selectedIds.has(step.id) && !step.disabled)
+  const activeRunStepId = activeRunStepIndex === null
+    ? null
+    : steps.filter((step) => !step.disabled)[activeRunStepIndex]?.id ?? null
+  const effectivePlaybackSpeed = normalizePlaybackSpeed(playbackSpeed)
+  const authoredDurationMs = steps.reduce(
+    (total, step) => total + (step.type === "delay" && !step.disabled ? Math.max(0, Number(step.ms) || 0) : 0),
+    0,
+  )
+  const effectiveDurationMs = Math.round(authoredDurationMs / effectivePlaybackSpeed)
+
+  const deleteSelection = () => {
+    if (selectedIds.size === steps.length) {
+      setShowClearConfirm(true)
+      return
+    }
+    onSetSteps(steps.filter((step) => !selectedIds.has(step.id)))
+    setSelectedIds(new Set())
+  }
+
+  const duplicateSelection = () => {
+    const result = duplicateSelectedSteps(steps, selectedIds)
+    onSetSteps(result.steps)
+    setSelectedIds(result.selectedIds)
+  }
+
+  const copySelection = () => {
+    const copied = copySelectedSteps(steps, selectedIds)
+    if (copied.length > 0) setStepClipboard(copied)
+  }
+
+  const cutSelection = () => {
+    const copied = copySelectedSteps(steps, selectedIds)
+    if (copied.length === 0) return
+    setStepClipboard(copied)
+    onSetSteps(steps.filter((step) => !selectedIds.has(step.id)))
+    setSelectedIds(new Set())
+  }
+
+  const pasteClipboard = () => {
+    const result = pasteSkillSteps(steps, stepClipboard, selectedIds)
+    if (result.steps === steps) return
+    onSetSteps(result.steps)
+    setSelectedIds(result.selectedIds)
+  }
+
+  const applyBulkDelay = (operation: "set" | "add" | "subtract") => {
+    const amount = Math.max(0, Number(bulkDelay) || 0)
+    onSetSteps(adjustSelectedDelays(steps, selectedIds, amount, operation))
+  }
+
+  const toggleSelectionDisabled = () => {
+    onSetSteps(setSelectedStepsDisabled(steps, selectedIds, selectedHasEnabledStep))
+  }
+
+  const selectStep = (id: string, modifiers: { toggle: boolean; range: boolean }) => {
+    if (locked) return
+    if (modifiers.range && selectionAnchorRef.current) {
+      const anchor = steps.findIndex((step) => step.id === selectionAnchorRef.current)
+      const current = steps.findIndex((step) => step.id === id)
+      const [start, end] = anchor < current ? [anchor, current] : [current, anchor]
+      setSelectedIds(new Set(steps.slice(start, end + 1).map((step) => step.id)))
+    } else if (modifiers.toggle) {
+      setSelectedIds((selected) => {
+        const next = new Set(selected)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+      selectionAnchorRef.current = id
+    } else {
+      setSelectedIds(new Set([id]))
+      selectionAnchorRef.current = id
+    }
+  }
 
   useEffect(() => {
     if (scrollRef.current && justAddedRef.current) {
@@ -123,12 +225,18 @@ export function SkillsTab({
     }
   }, [steps.length])
 
-  // Reset select-all when steps change or locked
   useEffect(() => {
-    if (selectAll && (locked || steps.length === 0)) {
-      setSelectAll(false)
-    }
-  }, [locked, steps.length, selectAll])
+    if (!activeRunStepId || editorView !== "list") return
+    scrollRef.current
+      ?.querySelector<HTMLElement>(`[data-step-id="${activeRunStepId}"]`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" })
+  }, [activeRunStepId, editorView])
+
+  // Discard selections that no longer exist, and clear selection when locked.
+  useEffect(() => {
+    const existing = new Set(steps.map((step) => step.id))
+    setSelectedIds((selected) => locked ? new Set() : new Set([...selected].filter((id) => existing.has(id))))
+  }, [locked, steps])
 
   const handleAddKeydown = () => {
     justAddedRef.current = true
@@ -152,54 +260,62 @@ export function SkillsTab({
     if (locked) return
     if (e.key === "Delete") {
       e.preventDefault()
-      if (selectAll) {
-        setShowClearConfirm(true)
-        return
-      }
-      if (!selectedId) return
-      onRemoveStep(selectedId)
-      setSelectedId(null)
+      if (selectedIds.size === 0) return
+      deleteSelection()
     } else if (e.ctrlKey && e.key === "d") {
       e.preventDefault()
-      if (!selectedId) return
-      onDuplicateStep(selectedId)
+      if (selectedIds.size === 0) return
+      duplicateSelection()
     } else if (e.ctrlKey && e.key === "ArrowUp") {
       e.preventDefault()
-      if (!selectedId) return
-      onMoveStepUp(selectedId)
+      moveSelection(-1)
     } else if (e.ctrlKey && e.key === "ArrowDown") {
       e.preventDefault()
-      if (!selectedId) return
-      onMoveStepDown(selectedId)
+      moveSelection(1)
     }
   }
 
   const handleGlobalKeyDown = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLElement
+    const isEditable = target instanceof HTMLInputElement
+      || target instanceof HTMLTextAreaElement
+      || target.isContentEditable
+    if (isEditable) return
     if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
       e.preventDefault()
       onUndo()
     } else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
       e.preventDefault()
       onRedo()
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+      e.preventDefault()
+      if (!locked) copySelection()
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+      e.preventDefault()
+      if (!locked) cutSelection()
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+      e.preventDefault()
+      if (!locked) pasteClipboard()
     } else if ((e.ctrlKey || e.metaKey) && e.key === "a") {
       e.preventDefault()
       if (!locked) {
-        setSelectAll((prev) => !prev)
-        setSelectedId(null)
+        setSelectedIds(new Set(steps.map((step) => step.id)))
       }
     }
   }
 
-  const reorderStep = (fromId: string, toId: string, position: "above" | "below") => {
-    if (fromId === toId) return
-    const from = steps.findIndex((s) => s.id === fromId)
-    if (from < 0) return
-    const next = [...steps]
-    const [moved] = next.splice(from, 1)
-    const toIdx = next.findIndex((s) => s.id === toId)
-    if (toIdx < 0) return
-    next.splice(position === "below" ? toIdx + 1 : toIdx, 0, moved)
-    onSetSteps(next)
+  const moveSelection = (direction: -1 | 1) => {
+    if (selectedIds.size === 0) return
+    const indexes = steps.map((step, index) => selectedIds.has(step.id) ? index : -1).filter((index) => index >= 0)
+    const boundary = direction < 0 ? Math.min(...indexes) : Math.max(...indexes)
+    const neighbor = boundary + direction
+    if (neighbor < 0 || neighbor >= steps.length || selectedIds.has(steps[neighbor].id)) return
+    reorderSelection(steps[neighbor].id, direction < 0 ? "above" : "below")
+  }
+
+  const reorderSelection = (toId: string, position: "above" | "below") => {
+    if (selectedIds.has(toId) || selectedIds.size === 0) return
+    onSetSteps(reorderSelectedSteps(steps, selectedIds, toId, position))
   }
 
   const handleRowDragOver = (e: React.DragEvent<HTMLDivElement>, stepId: string) => {
@@ -214,7 +330,7 @@ export function SkillsTab({
 
   const handleRowDrop = (e: React.DragEvent<HTMLDivElement>, stepId: string) => {
     e.preventDefault()
-    if (draggingId) reorderStep(draggingId, stepId, dropPosition)
+    if (draggingId) reorderSelection(stepId, dropPosition)
     clearDrag()
   }
 
@@ -264,8 +380,8 @@ export function SkillsTab({
   }
 
   return (
-    <Card size="sm" className="h-full" onKeyDown={handleGlobalKeyDown} tabIndex={0}>
-      <CardContent className="flex flex-1 flex-col gap-3 min-h-0">
+    <Card size="sm" className="h-full min-w-0 w-full" onKeyDown={handleGlobalKeyDown} tabIndex={0}>
+      <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="enable-skills" className="font-normal">
             Enable skills channel
@@ -278,7 +394,7 @@ export function SkillsTab({
         </div>
 
         {enabled ? (
-          <div className="flex flex-1 flex-col gap-3 min-h-0 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 animate-in fade-in-0 slide-in-from-top-2 duration-200">
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="hold-right-click" className="font-normal">
                 Hold right mouse button
@@ -300,6 +416,19 @@ export function SkillsTab({
                 <SelectContent>
                   <SelectItem value="abbreviation">KD / KU / DL</SelectItem>
                   <SelectItem value="icon">↓ / ↑ / ⏱</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={editorView} onValueChange={(value) => {
+                if (!value) return
+                const view = value as "list" | "timeline"
+                setEditorView(view)
+                localStorage.setItem("combo-macro-skill-editor-view", view)
+              }}>
+                <SelectTrigger className="h-7 w-[105px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="list">List view</SelectItem>
+                  <SelectItem value="timeline">Timeline</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -468,10 +597,12 @@ export function SkillsTab({
                 <div className="flex-1" />
 
                 <Button
-                  variant={isRecording ? "destructive" : "outline"}
+                  variant={isRecording || countdown !== null ? "destructive" : "outline"}
                   size="sm"
                   onClick={async () => {
-                    if (isRecording) {
+                    if (countdown !== null) {
+                      cancelCountdown()
+                    } else if (isRecording) {
                       const steps = await stopRecording()
                       if (steps && onRecordedSteps) {
                         onRecordedSteps(steps)
@@ -482,7 +613,12 @@ export function SkillsTab({
                   }}
                   className="gap-1"
                 >
-                  {isRecording ? (
+                  {countdown !== null ? (
+                    <>
+                      <Square className="size-3" />
+                      Cancel {countdown}
+                    </>
+                  ) : isRecording ? (
                     <>
                       <Square className="size-3" />
                       Stop
@@ -497,6 +633,42 @@ export function SkillsTab({
               </div>
             )}
 
+            {!locked && (selectedIds.size > 0 || stepClipboard.length > 0) && (
+              <StepSelectionInspector
+                selectedCount={selectedIds.size}
+                selectedDelayCount={selectedDelayCount}
+                selectedHasEnabledStep={selectedHasEnabledStep}
+                clipboardCount={stepClipboard.length}
+                bulkDelay={bulkDelay}
+                onBulkDelayChange={setBulkDelay}
+                onDuplicate={duplicateSelection}
+                onCopy={copySelection}
+                onCut={cutSelection}
+                onPaste={pasteClipboard}
+                onToggleDisabled={toggleSelectionDisabled}
+                onDelete={deleteSelection}
+                onAdjustDelay={applyBulkDelay}
+              />
+            )}
+
+            {keyError && (
+              <Alert variant="destructive" className="py-2">
+                <AlertTriangle />
+                <AlertTitle>Choose a supported key</AlertTitle>
+                <AlertDescription>Empty or unsupported key steps must be corrected before running.</AlertDescription>
+              </Alert>
+            )}
+            {unmatchedKeydowns.length > 0 && (
+              <Alert className="py-2 border-amber-500/40 bg-amber-500/5">
+                <AlertTriangle className="text-amber-600" />
+                <AlertTitle>Key held without a matching release</AlertTitle>
+                <AlertDescription>
+                  {unmatchedKeydowns.join(", ")} {unmatchedKeydowns.length === 1 ? "has" : "have"} a KeyDown without a later KeyUp. This is allowed, but verify it is intentional.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {editorView === "list" ? (
             <div
               ref={scrollRef}
               className="flex-1 min-h-0 overflow-y-auto scroll-smooth"
@@ -530,15 +702,28 @@ export function SkillsTab({
                       </div>
                       <div
                         data-step-row
-                        onClick={() => {
-                          if (locked) return
-                          setSelectedId((prev) => (prev === step.id ? null : step.id))
+                        data-step-id={step.id}
+                        draggable={!locked}
+                        onClick={(event) => {
+                          selectStep(step.id, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
                           scrollRef.current?.focus()
+                        }}
+                        onDragStart={(event) => {
+                          const target = event.target as HTMLElement
+                          if (target.closest("input, button, textarea, select, [contenteditable='true'], [data-no-row-drag]")) {
+                            event.preventDefault()
+                            return
+                          }
+                          if (!selectedIds.has(step.id)) setSelectedIds(new Set([step.id]))
+                          setDraggingId(step.id)
+                          event.dataTransfer.effectAllowed = "move"
+                          event.dataTransfer.setData("text/plain", step.id)
+                          event.dataTransfer.setDragImage(event.currentTarget, 12, 12)
                         }}
                         onDragOver={(e) => handleRowDragOver(e, step.id)}
                         onDrop={(e) => handleRowDrop(e, step.id)}
                         onDragEnd={clearDrag}
-                        className={`flex flex-1 cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-2 transition-colors animate-in fade-in-0 slide-in-from-left-2 duration-200 ${
+                        className={`flex flex-1 items-center gap-1.5 rounded-xl border px-3 py-2 transition-colors animate-in fade-in-0 slide-in-from-left-2 duration-200 ${locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"} ${step.disabled ? "opacity-40" : ""} ${activeRunStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""} ${
                           draggingId === step.id ? "opacity-50" : ""
                         } ${
                           dragOverId === step.id
@@ -547,25 +732,16 @@ export function SkillsTab({
                               : "border-b-2 border-b-primary transition-all duration-150"
                             : ""
                         } ${
-                          selectedId === step.id || selectAll
+                          selectedIds.has(step.id)
                             ? "border-primary bg-primary/10 ring-1 ring-primary"
                             : "hover:bg-muted/50"
                         }`}
                       >
                         {!locked && (
                           <span
-                            draggable
-                            onDragStart={(e) => {
-                              setDraggingId(step.id)
-                              e.dataTransfer.effectAllowed = "move"
-                              e.dataTransfer.setData("text/plain", step.id)
-                              const row = (e.currentTarget.closest("[data-step-row]") ??
-                                e.currentTarget) as HTMLElement
-                              e.dataTransfer.setDragImage(row, 12, 12)
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex shrink-0 cursor-grab items-center text-muted-foreground active:cursor-grabbing"
+                            className="flex shrink-0 items-center text-muted-foreground"
                             aria-label="Drag to reorder"
+                            title="Drag anywhere on the row to reorder"
                           >
                             <GripVertical className="size-3.5" />
                           </span>
@@ -592,18 +768,11 @@ export function SkillsTab({
                             <span className="text-xs text-muted-foreground">ms</span>
                           </>
                         ) : (
-                          <Input
+                          <SkillKeyPicker
                             value={step.key}
-                            readOnly={locked}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
-                              onUpdateStep(step.id, {
-                                key: e.target.value.slice(-1),
-                              })
-                            }
-                            placeholder="Key"
-                            maxLength={1}
-                            className="h-7 w-12 text-center text-xs uppercase"
+                            disabled={locked}
+                            invalid={invalidStepIds.has(step.id)}
+                            onChange={(key) => onUpdateStep(step.id, { key })}
                           />
                         )}
 
@@ -706,6 +875,46 @@ export function SkillsTab({
                 </p>
               )}
             </div>
+            ) : (
+              <SkillTimeline
+                steps={steps}
+                selectedIds={selectedIds}
+                locked={locked}
+                onSelect={selectStep}
+                onUpdateStep={onUpdateStep}
+                activeStepId={activeRunStepId}
+                playbackSpeed={playbackSpeed}
+              />
+            )}
+
+            <Separator />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full items-center justify-between gap-3">
+                <Label className="font-normal">Playback speed</Label>
+                <span className="min-w-12 text-right text-sm font-medium tabular-nums">
+                  {effectivePlaybackSpeed.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}×
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">0.1×</span>
+              <Slider
+                className="min-w-32 flex-1"
+                min={0.1}
+                max={4}
+                step={0.05}
+                value={[effectivePlaybackSpeed]}
+                disabled={runnerActive}
+                aria-label="Playback speed"
+                onValueChange={(value) => setPlaybackSpeed(String(typeof value === "number" ? value : value[0]))}
+              />
+              <span className="text-xs text-muted-foreground">4×</span>
+              <Button type="button" variant="ghost" size="xs" disabled={runnerActive || effectivePlaybackSpeed === 1} onClick={() => setPlaybackSpeed("1")}>Reset 1×</Button>
+              <span className="basis-full text-xs text-muted-foreground">
+                {runnerActive
+                  ? "Stop playback to change speed. The current run keeps the speed it started with."
+                  : `${authoredDurationMs.toLocaleString()} ms authored · ${effectiveDurationMs.toLocaleString()} ms effective per cycle`}
+              </span>
+            </div>
 
             <Separator />
 
@@ -741,8 +950,7 @@ export function SkillsTab({
               onClick={() => {
                 onSetSteps([])
                 setShowClearConfirm(false)
-                setSelectAll(false)
-                setSelectedId(null)
+                setSelectedIds(new Set())
               }}
             >
               Delete all
@@ -750,6 +958,21 @@ export function SkillsTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={countdown !== null} onOpenChange={(open) => { if (!open) cancelCountdown() }}>
+        <DialogContent className="max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Recording starts in</DialogTitle>
+            <DialogDescription>Switch to your target window and get ready.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 text-center text-6xl font-semibold tabular-nums text-primary">
+            {countdown}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelCountdown}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

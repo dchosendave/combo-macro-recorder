@@ -96,12 +96,15 @@ describe("useSkillSettings", () => {
     })
   })
 
-  it("skillsCanRun requires an enabled keydown step", () => {
+  it("skillsCanRun requires an enabled keydown step with a supported key", () => {
     const { result } = renderHook(() => useSkillSettings(defaultSkillConfig()))
     expect(result.current.skillsCanRun).toBe(false)
     act(() => result.current.addSkillKeydown())
     expect(result.current.skillsCanRun).toBe(false)
     act(() => result.current.setSkillsEnabled(true))
+    expect(result.current.skillsCanRun).toBe(false)
+    const step = result.current.skillSteps[0]
+    act(() => result.current.updateSkillStep(step.id, { key: "Space" }))
     expect(result.current.skillsCanRun).toBe(true)
   })
 })

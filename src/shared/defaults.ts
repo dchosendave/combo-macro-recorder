@@ -37,6 +37,8 @@ export function defaultHotkeyBinding(): HotkeyBinding {
     name: "Untitled",
     hotkey: "F5",
     comboPath: "",
+    mode: "toggle",
+    comboPaths: [],
   }
 }
 

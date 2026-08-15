@@ -11,7 +11,7 @@ export function loadHotkeys(): HotkeyBinding[] {
 
     if (parsed?.version === 3) {
       if (Array.isArray(parsed.hotkeys) && parsed.hotkeys.length > 0) {
-        return parsed.hotkeys as HotkeyBinding[]
+        return parsed.hotkeys.map((binding: HotkeyBinding) => ({ ...binding, mode: binding.mode ?? "toggle" }))
       }
       return [defaultHotkeyBinding()]
     }
@@ -24,6 +24,8 @@ export function loadHotkeys(): HotkeyBinding[] {
           name: "Untitled",
           hotkey: parsed.hotkey ?? "F5",
           comboPath: "",
+          mode: "toggle",
+          comboPaths: [],
         },
       ]
     }

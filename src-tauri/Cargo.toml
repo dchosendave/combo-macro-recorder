@@ -19,7 +19,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 enigo = "0.6"
@@ -33,4 +32,3 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphic
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
 tempfile = "3"
-

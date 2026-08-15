@@ -1,12 +1,14 @@
 mod commands;
 mod runner;
 
-use commands::files::{list_combo_files, read_file, read_jitbit_file, save_file};
+use commands::files::{
+    list_combo_files, read_backup_file, read_file, read_jitbit_file, restore_backup_file, save_file,
+};
 use commands::hotkeys::{set_hotkeys, HotkeyState};
 use commands::processes::list_processes;
 use commands::recorder::{start_recording, stop_recording};
 use commands::window::set_hard_corners;
-use runner::{init_timing, start_combo, stop_all, stop_all_inner, AppState};
+use runner::{get_runner_status, init_timing, start_combo, stop_all, stop_all_inner, AppState};
 use tauri::{Emitter, Manager, RunEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,19 +16,23 @@ pub fn run() {
     init_timing();
 
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
-                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        let state = app.try_state::<HotkeyState>();
-                        if let Some(state) = state {
-                            let mappings = state.mappings.lock();
-                            let key = shortcut.to_string();
-                            if let Some(hotkey_id) = mappings.get(&key) {
-                                let _ = app.emit("macro-toggle", hotkey_id.clone());
-                            }
+                    let state = app.try_state::<HotkeyState>();
+                    if let Some(state) = state {
+                        let mappings = state.mappings.lock();
+                        let key = shortcut.to_string();
+                        if let Some(hotkey_id) = mappings.get(&key) {
+                            let key_state = match event.state() {
+                                tauri_plugin_global_shortcut::ShortcutState::Pressed => "pressed",
+                                tauri_plugin_global_shortcut::ShortcutState::Released => "released",
+                            };
+                            let _ = app.emit(
+                                "macro-hotkey",
+                                serde_json::json!({ "hotkeyId": hotkey_id, "state": key_state }),
+                            );
                         }
                     }
                 })
@@ -37,8 +43,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_combo,
             stop_all,
+            get_runner_status,
             save_file,
             read_file,
+            read_backup_file,
+            restore_backup_file,
             read_jitbit_file,
             set_hotkeys,
             start_recording,

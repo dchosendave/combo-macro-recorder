@@ -134,8 +134,14 @@ mod tests {
         let start = Instant::now();
         sleep_precise(200, &running);
         let elapsed = start.elapsed();
-        assert!(elapsed >= Duration::from_millis(150), "slept only {elapsed:?}");
-        assert!(elapsed <= Duration::from_millis(1000), "slept {elapsed:?}, way too long");
+        assert!(
+            elapsed >= Duration::from_millis(150),
+            "slept only {elapsed:?}"
+        );
+        assert!(
+            elapsed <= Duration::from_millis(1000),
+            "slept {elapsed:?}, way too long"
+        );
     }
 
     #[test]
@@ -163,8 +169,14 @@ mod tests {
         fallback_spin(80, &running);
         let elapsed = start.elapsed();
         // ±40% tolerance, mirroring the style of the sleep_precise test above.
-        assert!(elapsed >= Duration::from_millis(48), "returned too early: {elapsed:?}");
-        assert!(elapsed <= Duration::from_millis(500), "slept {elapsed:?}, way too long");
+        assert!(
+            elapsed >= Duration::from_millis(48),
+            "returned too early: {elapsed:?}"
+        );
+        assert!(
+            elapsed <= Duration::from_millis(500),
+            "slept {elapsed:?}, way too long"
+        );
     }
 
     #[test]

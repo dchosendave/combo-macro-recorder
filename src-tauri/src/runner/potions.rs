@@ -112,7 +112,7 @@ fn run_potions<R: Runtime>(
         if config.repeat_mode == "count" && cycle >= config.repeat_count.max(1) {
             let _ = app.emit(
                 "macro-finished",
-                serde_json::json!({ "channel": "potions", "cycle": cycle }),
+                serde_json::json!({ "channel": "potions", "cycle": cycle, "reason": "repeat-complete" }),
             );
             running.store(false, Ordering::SeqCst);
             break;
@@ -123,7 +123,11 @@ fn run_potions<R: Runtime>(
 
 /// Spawns the potions loop on a dedicated thread. The caller is responsible for
 /// stopping the channel beforehand (see `start_combo`).
-pub(crate) fn spawn_potions<R: Runtime>(config: PotionConfig, app: &AppHandle<R>, state: &AppState) {
+pub(crate) fn spawn_potions<R: Runtime>(
+    config: PotionConfig,
+    app: &AppHandle<R>,
+    state: &AppState,
+) {
     let running = state.potions.running.clone();
     running.store(true, Ordering::SeqCst);
 
@@ -155,13 +159,28 @@ mod tests {
 
     #[test]
     fn enabled_keys_preserve_qwer_order() {
-        let all = Keys { q: true, w: true, e: true, r: true };
+        let all = Keys {
+            q: true,
+            w: true,
+            e: true,
+            r: true,
+        };
         assert_eq!(enabled_potion_keys(&all), vec!['q', 'w', 'e', 'r']);
 
-        let subset = Keys { q: true, w: false, e: true, r: false };
+        let subset = Keys {
+            q: true,
+            w: false,
+            e: true,
+            r: false,
+        };
         assert_eq!(enabled_potion_keys(&subset), vec!['q', 'e']);
 
-        let none = Keys { q: false, w: false, e: false, r: false };
+        let none = Keys {
+            q: false,
+            w: false,
+            e: false,
+            r: false,
+        };
         assert!(enabled_potion_keys(&none).is_empty());
     }
 
@@ -189,7 +208,10 @@ mod tests {
                 InjectedEvent::Release(Key::Unicode('w')),
             ]
         );
-        assert!(!running.load(Ordering::SeqCst), "loop must stop after Repeat-N");
+        assert!(
+            !running.load(Ordering::SeqCst),
+            "loop must stop after Repeat-N"
+        );
     }
 
     #[test]
@@ -236,7 +258,10 @@ mod tests {
         handle.join().unwrap();
 
         let events = log.lock().clone();
-        assert!(!events.is_empty(), "loop should have injected before cancellation");
+        assert!(
+            !events.is_empty(),
+            "loop should have injected before cancellation"
+        );
         // Every pressed key must be released (mid-loop or cleanup), and the
         // cleanup pass releases the full sequence last.
         let mut pressed = std::collections::HashMap::new();
@@ -260,7 +285,10 @@ mod tests {
             ]),
             "cleanup must release the full sequence last"
         );
-        assert!(!running.load(Ordering::SeqCst), "cancelled loop must clear running");
+        assert!(
+            !running.load(Ordering::SeqCst),
+            "cancelled loop must clear running"
+        );
     }
 
     #[test]
@@ -299,6 +327,10 @@ mod tests {
             &mut injector,
         );
 
-        assert_eq!(count.load(Ordering::SeqCst), 2, "potions activation must be throttled to every 10th cycle");
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            2,
+            "potions activation must be throttled to every 10th cycle"
+        );
     }
 }

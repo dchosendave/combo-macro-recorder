@@ -22,6 +22,7 @@ export function useSkillSettings(initial: SkillConfig) {
   const [labelStyle, setLabelStyle] = useState<StepLabelStyle>(initial.labelStyle)
   const [skillsRepeatMode, setSkillsRepeatMode] = useState<RepeatMode>(initial.repeatMode)
   const [skillsRepeatCount, setSkillsRepeatCount] = useState(initial.repeatCount)
+  const [playbackSpeed, setPlaybackSpeed] = useState(initial.playbackSpeed ?? "1")
 
   const addSkillKeydown = useCallback(() => {
     setSkillSteps((prev) => [...prev, { id: crypto.randomUUID(), type: "keydown", key: "" }])
@@ -82,6 +83,7 @@ export function useSkillSettings(initial: SkillConfig) {
     setLabelStyle(config.labelStyle)
     setSkillsRepeatMode(config.repeatMode)
     setSkillsRepeatCount(config.repeatCount)
+    setPlaybackSpeed(config.playbackSpeed ?? "1")
   }, [])
 
   const persisted = useMemo<SkillConfig>(
@@ -92,14 +94,17 @@ export function useSkillSettings(initial: SkillConfig) {
       labelStyle,
       repeatMode: skillsRepeatMode,
       repeatCount: skillsRepeatCount,
+      ...(playbackSpeed === "1" ? {} : { playbackSpeed }),
     }),
-    [skillsEnabled, holdRightClick, skillSteps, labelStyle, skillsRepeatMode, skillsRepeatCount],
+    [skillsEnabled, holdRightClick, skillSteps, labelStyle, skillsRepeatMode, skillsRepeatCount, playbackSpeed],
   )
 
   // Can-run gating + backend config come from the shared derivation, so
   // tabs-edited combos and file-loaded combos behave identically.
   const derivation = useMemo(() => deriveSkillRun(persisted), [persisted])
   const skillsRepeatError = derivation.repeatError
+  const skillsKeyError = derivation.keyError
+  const unmatchedKeydowns = derivation.unmatchedKeydowns
   const skillsCanRun = derivation.canRun
   const skillsConfig = derivation.config
 
@@ -113,7 +118,8 @@ export function useSkillSettings(initial: SkillConfig) {
     labelStyle, setLabelStyle,
     skillsRepeatMode, setSkillsRepeatMode,
     skillsRepeatCount, setSkillsRepeatCount,
-    skillsRepeatError, skillsCanRun,
+    playbackSpeed, setPlaybackSpeed,
+    skillsRepeatError, skillsKeyError, unmatchedKeydowns, skillsCanRun,
     apply,
     persisted,
     skillsConfig,

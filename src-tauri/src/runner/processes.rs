@@ -95,7 +95,8 @@ pub(crate) fn wchar_array_to_string(chars: &[u16]) -> String {
 fn enumerate_processes_windows() -> Vec<ProcessInfo> {
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
     };
 
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
@@ -132,7 +133,10 @@ fn attach_window_titles(processes: &mut [ProcessInfo]) {
 
     let mut titles: HashMap<u32, String> = HashMap::new();
     unsafe {
-        EnumWindows(Some(collect_window_titles), &mut titles as *mut HashMap<u32, String> as isize);
+        EnumWindows(
+            Some(collect_window_titles),
+            &mut titles as *mut HashMap<u32, String> as isize,
+        );
     }
     for p in processes.iter_mut() {
         if let Some(title) = titles.get(&p.pid) {
@@ -149,7 +153,9 @@ unsafe extern "system" fn collect_window_titles(
 ) -> windows_sys::core::BOOL {
     use std::collections::HashMap;
 
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    };
 
     if unsafe { IsWindowVisible(hwnd) } == 0 {
         return 1; // keep enumerating
@@ -182,7 +188,8 @@ unsafe extern "system" fn collect_window_titles(
 fn exe_path(pid: u32) -> Option<PathBuf> {
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     let handle: HANDLE = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
@@ -192,7 +199,9 @@ fn exe_path(pid: u32) -> Option<PathBuf> {
 
     let mut buf = [0u16; 1024];
     let mut size = buf.len() as u32;
-    let ok = unsafe { QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, buf.as_mut_ptr(), &mut size) } != 0;
+    let ok = unsafe {
+        QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, buf.as_mut_ptr(), &mut size)
+    } != 0;
     unsafe { CloseHandle(handle) };
 
     if !ok || size == 0 {
@@ -215,14 +224,26 @@ fn friendly_name_from_path(path: &std::path::Path) -> Option<String> {
     }
 
     let mut data = vec![0u8; size as usize];
-    if unsafe { GetFileVersionInfoW(wide.as_ptr(), 0, size, data.as_mut_ptr() as *mut core::ffi::c_void) } == 0 {
+    if unsafe {
+        GetFileVersionInfoW(
+            wide.as_ptr(),
+            0,
+            size,
+            data.as_mut_ptr() as *mut core::ffi::c_void,
+        )
+    } == 0
+    {
         return None;
     }
 
     let mut subblocks: Vec<String> = Vec::new();
     if let Some((lang, codepage)) = translation_table(&data) {
-        subblocks.push(format!("\\StringFileInfo\\{lang:04x}{codepage:04x}\\FileDescription"));
-        subblocks.push(format!("\\StringFileInfo\\{lang:04x}{codepage:04x}\\ProductName"));
+        subblocks.push(format!(
+            "\\StringFileInfo\\{lang:04x}{codepage:04x}\\FileDescription"
+        ));
+        subblocks.push(format!(
+            "\\StringFileInfo\\{lang:04x}{codepage:04x}\\ProductName"
+        ));
     }
     subblocks.push("\\StringFileInfo\\080904b0\\FileDescription".to_string());
     subblocks.push("\\StringFileInfo\\080904b0\\ProductName".to_string());
@@ -256,8 +277,14 @@ fn ver_query<'a>(data: &'a [u8], sub: &str) -> Option<&'a [u8]> {
     let wide = to_wide(std::ffi::OsStr::new(sub))?;
     let mut buf: *mut core::ffi::c_void = std::ptr::null_mut();
     let mut len: u32 = 0;
-    let ok =
-        unsafe { VerQueryValueW(data.as_ptr() as *const core::ffi::c_void, wide.as_ptr(), &mut buf, &mut len) } != 0;
+    let ok = unsafe {
+        VerQueryValueW(
+            data.as_ptr() as *const core::ffi::c_void,
+            wide.as_ptr(),
+            &mut buf,
+            &mut len,
+        )
+    } != 0;
     if !ok || buf.is_null() || len == 0 {
         return None;
     }

@@ -77,7 +77,9 @@ export function useSettings() {
     labelStyle: skills.labelStyle, setLabelStyle: skills.setLabelStyle,
     skillsRepeatMode: skills.skillsRepeatMode, setSkillsRepeatMode: skills.setSkillsRepeatMode,
     skillsRepeatCount: skills.skillsRepeatCount, setSkillsRepeatCount: skills.setSkillsRepeatCount,
+    playbackSpeed: skills.playbackSpeed, setPlaybackSpeed: skills.setPlaybackSpeed,
     skillsRepeatError: skills.skillsRepeatError, skillsCanRun: skills.skillsCanRun,
+    skillsKeyError: skills.skillsKeyError, unmatchedKeydowns: skills.unmatchedKeydowns,
     // Undo/Redo
     undoSteps: skills.undoSteps, redoSteps: skills.redoSteps,
     canUndoSteps: skills.canUndo, canRedoSteps: skills.canRedo,
@@ -87,6 +89,8 @@ export function useSettings() {
     hotkeys: hotkeysFeature.hotkeys,
     addHotkey: hotkeysFeature.addHotkey, deleteHotkey: hotkeysFeature.deleteHotkey, renameHotkey: hotkeysFeature.renameHotkey,
     updateHotkeyBinding: hotkeysFeature.updateHotkeyBinding, updateHotkeyPath: hotkeysFeature.updateHotkeyPath,
+    updateHotkeyMode: hotkeysFeature.updateHotkeyMode,
+    updateHotkeyCyclePaths: hotkeysFeature.updateHotkeyCyclePaths,
     moveHotkeyUp: hotkeysFeature.moveHotkeyUp, moveHotkeyDown: hotkeysFeature.moveHotkeyDown,
     applyCombo,
     // Global

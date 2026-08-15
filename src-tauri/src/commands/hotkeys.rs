@@ -239,6 +239,10 @@ mod tests {
         };
 
         apply_hotkey_diff(&["F5".into()], &["F6".into()], unregister, register).unwrap();
-        assert_eq!(*log.lock().unwrap(), vec!["r:F6"], "registration still proceeds");
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec!["r:F6"],
+            "registration still proceeds"
+        );
     }
 }

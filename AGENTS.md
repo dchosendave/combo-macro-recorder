@@ -26,12 +26,35 @@ Version is duplicated in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/taur
 
 - `src/` is organized by feature: `app/`, `combo-file/`, `hotkeys/`, `potions/`, `recorder/`, `runner/`, `skills/`, `shared/`. File names are **kebab-case** (recent convention change; keep it).
 - `@/*` aliases to `src/*`. UI primitives live in `src/shared/components/ui/` and use the new **`@shadcn/react` + Base UI stack, not Radix**.
-- Rust: lib crate is named `combo_macro_recorder_lib` — the `_lib` suffix is a required Windows cargo workaround, don't rename. All Tauri commands are registered in `src-tauri/src/lib.rs` (`start_combo`, `stop_all`, `save_file`, `read_file`, `set_hotkeys`, `start_recording`, `stop_recording`, `list_combo_files`).
+- Rust: lib crate is named `combo_macro_recorder_lib` — the `_lib` suffix is a required Windows cargo workaround, don't rename. `src-tauri/src/lib.rs` is the authoritative registration list for every Tauri command.
 - `src-tauri/src/runner/` runs the macro loops (potions/skills channels); `start_combo` swaps channels under a `switch_lock` so stop/start never interleaves.
-- `docs/architecture.md` is the full wiring reference: Tauri command/event contracts, frontend state & localStorage keys, combo file format, runner/recording internals, and the validation-mirroring rule (`toRunnerInputs` vs settings hooks — keep in sync). Read it before touching run paths.
+- Start at `docs/README.md`. Read `docs/architecture.md` before changing ownership/run paths, `docs/contracts.md` before changing cross-boundary data, and `docs/combo-file-format.md` before changing persisted combo fields.
 
 ## Platform gotchas
 
 - Real key injection (`enigo`, SendInput) and global hotkeys work **only on Windows**; on Wayland/Linux they're OS-blocked. If the target game runs elevated, the app must run as administrator too (UIPI).
-- Global shortcuts → Rust plugin handler emits a `macro-toggle` event → frontend subscribes (`src/hotkeys/use-global-hotkeys.ts`). Keep that flow when adding hotkeys.
+- Global shortcuts → Rust plugin handler emits `macro-hotkey {hotkeyId,state}` → frontend subscribes (`src/hotkeys/use-global-hotkeys.ts`). Preserve press/release semantics when adding modes.
 - Window is borderless (`decorations: false`, min 660x720) with a custom title bar in `src/app/title-bar.tsx`; drag region handled in CSS.
+
+## Change impact map
+
+| When changing | Also inspect and update |
+|---|---|
+| Skill-step schema | shared types/defaults, combo I/O, validation, runner inputs, both editors, Rust serde boundary, format docs |
+| Tauri command | Rust implementation/registration, frontend invoke, mocks/tests, `docs/contracts.md` |
+| Tauri event | emitter, listener/unlisten, payload test, session ordering, `docs/contracts.md` |
+| Hotkeys | persistence migration, registration diff/rollback, modes, emergency conflicts, user guide |
+| Runner state | session IDs, frontend command queue, compact mode, stop cleanup, ADR 0001 |
+| Combo format | version/import compatibility, dirty baseline, recovery, tests, format docs, ADR |
+| Recorder keys | picker vs internal vocabulary, normalizer, recorder, parser, injector, reliability QA |
+| UI layout | 660x720 minimum, collapsed sidebar, overflow endpoints, manual QA |
+| Tauri plugin/permission | capabilities, Rust/frontend dependencies, CSP/security docs, packaged build |
+
+## Documentation policy
+
+- User-visible behavior changes update `docs/user-guide.md`.
+- Commands, events, wire shapes, and storage keys update `docs/contracts.md`.
+- Persisted schema changes update `docs/combo-file-format.md` and require migration tests.
+- Manual-only behavior updates `docs/manual-qa.md`.
+- Consequential tradeoffs get an ADR under `docs/decisions/`.
+- Avoid duplicating detailed contracts in README or AGENTS; link to the owner.

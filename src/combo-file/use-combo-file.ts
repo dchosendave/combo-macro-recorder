@@ -18,13 +18,16 @@ type UseComboFileArgs = {
 }
 
 type PendingAction = { type: "open" | "new"; path?: string } | null
+type PendingRecovery = { path: string; combo: CurrentCombo } | null
 
 /** Combo file lifecycle: open/save/save-as/new with dirty tracking (string comparison against a baseline snapshot), unsaved-changes confirm dialogs, Ctrl+S, and auto-load of the last file on startup. */
 export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFailed }: UseComboFileArgs) {
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [baseline, setBaseline] = useState(EMPTY_BASELINE)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const [pendingRecovery, setPendingRecovery] = useState<PendingRecovery>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
 
   const currentFilePathRef = useRef(currentFilePath)
   currentFilePathRef.current = currentFilePath
@@ -41,6 +44,7 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
     const combo: CurrentCombo = { potions: defaultPotionConfig(), skills: defaultSkillConfig() }
     applyCombo(combo)
     setCurrentFilePath(null)
+    setLastSavedAt(null)
     setBaseline(exportComboToString(combo))
     localStorage.removeItem(LAST_PATH_KEY)
     setIsProcessing(false)
@@ -52,12 +56,22 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
       const combo = importComboFromString(content)
       applyCombo(combo)
       setCurrentFilePath(path)
+      setLastSavedAt(null)
       setBaseline(exportComboToString(combo))
       localStorage.setItem(LAST_PATH_KEY, path)
       toast.success(`Opened ${path.split(/[\\/]/).pop() ?? path}`)
       onOpened?.(path)
       return true
     } catch (e) {
+      try {
+        const backup = await invoke<string>("read_backup_file", { path })
+        const combo = importComboFromString(backup)
+        setPendingRecovery({ path, combo })
+        toast.warning("This combo is damaged, but a recovery copy is available")
+        return false
+      } catch {
+        // No valid recovery copy exists; report the original open failure.
+      }
       toast.error(`Open failed: ${e}`)
       onOpenFailed?.(path)
       return false
@@ -95,6 +109,7 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
       await invoke("save_file", { path, content: json })
       setCurrentFilePath(path)
       setBaseline(json)
+      setLastSavedAt(Date.now())
       localStorage.setItem(LAST_PATH_KEY, path)
       onSave?.(path)
     },
@@ -186,6 +201,28 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
     setPendingAction(null)
   }, [])
 
+  const confirmRecovery = useCallback(async () => {
+    const recovery = pendingRecovery
+    if (!recovery) return false
+    try {
+      await invoke("restore_backup_file", { path: recovery.path })
+      applyCombo(recovery.combo)
+      setCurrentFilePath(recovery.path)
+      setLastSavedAt(Date.now())
+      setBaseline(exportComboToString(recovery.combo))
+      localStorage.setItem(LAST_PATH_KEY, recovery.path)
+      setPendingRecovery(null)
+      onOpened?.(recovery.path)
+      toast.success("Recovered the previous saved version")
+      return true
+    } catch (e) {
+      toast.error(`Recovery failed: ${e}`)
+      return false
+    }
+  }, [pendingRecovery, applyCombo, onOpened])
+
+  const cancelRecovery = useCallback(() => setPendingRecovery(null), [])
+
   const requestOpenPath = useCallback((path: string) => {
     if (isDirty) {
       setPendingAction({ type: "open", path })
@@ -204,10 +241,18 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
       const combo = importComboFromString(content)
       applyCombo(combo)
       setCurrentFilePath(lastPath)
+      setLastSavedAt(null)
       setBaseline(exportComboToString(combo))
       return true
     } catch {
-      localStorage.removeItem(LAST_PATH_KEY)
+      try {
+        const backup = await invoke<string>("read_backup_file", { path: lastPath })
+        const combo = importComboFromString(backup)
+        setPendingRecovery({ path: lastPath, combo })
+        toast.warning("Your last combo is damaged, but a recovery copy is available")
+      } catch {
+        localStorage.removeItem(LAST_PATH_KEY)
+      }
       return false
     }
   }, [applyCombo])
@@ -216,10 +261,12 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
     currentFilePath, setCurrentFilePath,
     openFile, openPath, saveFile, saveFileAs,
     newCombo: doNew,
-    isDirty, isProcessing,
+    isDirty, isProcessing, lastSavedAt,
     pendingAction,
+    pendingRecovery,
     requestOpen, requestNew, requestOpenPath,
     confirmDiscard, cancelDiscard,
+    confirmRecovery, cancelRecovery,
     tryAutoLoad,
   }
 }

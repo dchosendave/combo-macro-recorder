@@ -1,5 +1,6 @@
 import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/defaults"
 import type { PotionConfig, PotionKey, RepeatMode, SkillConfig } from "@/shared/types"
+import { analyzeSkillSteps, normalizeSkillKey } from "@/shared/skill-keys"
 
 /**
  * Run-config derivation — the single source of truth for "can this channel
@@ -39,7 +40,14 @@ export type PotionRunDerivation = {
 export type SkillRunDerivation = {
   canRun: boolean
   repeatError: boolean
+  keyError: boolean
+  unmatchedKeydowns: string[]
   config: SkillsRunConfig
+}
+
+export function normalizePlaybackSpeed(value: string | undefined): number {
+  const speed = Number(value)
+  return Number.isFinite(speed) ? Math.min(4, Math.max(0.1, speed)) : 1
 }
 
 /**
@@ -79,21 +87,27 @@ export function deriveSkillRun(s: SkillConfig): SkillRunDerivation {
   const repeatError =
     s.repeatMode === "count" &&
     (s.repeatCount === "" || Number(s.repeatCount) < MIN_REPEAT)
+  const enabledSteps = s.steps.filter((step) => !step.disabled)
+  const playbackSpeed = normalizePlaybackSpeed(s.playbackSpeed)
+  const analysis = analyzeSkillSteps(enabledSteps)
+  const keyError = analysis.invalidStepIds.length > 0
 
   const config: SkillsRunConfig = {
     holdRightClick: s.holdRightClick,
-    steps: s.steps.map((step) =>
+    steps: enabledSteps.map((step) =>
       step.type === "delay"
-        ? { type: "delay" as const, ms: Math.max(0, Number(step.ms) || 0) }
-        : { type: step.type, key: step.key.trim() },
+        ? { type: "delay" as const, ms: Math.round(Math.max(0, Number(step.ms) || 0) / playbackSpeed) }
+        : { type: step.type, key: normalizeSkillKey(step.key) ?? step.key.trim() },
     ),
     repeatMode: s.repeatMode,
     repeatCount: Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(s.repeatCount) || MIN_REPEAT)),
   }
 
   return {
-    canRun: s.enabled && s.steps.some((step) => step.type === "keydown") && !repeatError,
+    canRun: s.enabled && enabledSteps.some((step) => step.type === "keydown") && !repeatError && !keyError,
     repeatError,
+    keyError,
+    unmatchedKeydowns: analysis.unmatchedKeydowns,
     config,
   }
 }

@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::{Duration, Instant};
 
 use enigo::Key;
 use serde::Deserialize;
@@ -72,22 +73,34 @@ fn run_skills<R: Runtime>(
     config: SkillConfig,
     app: AppHandle<R>,
     running: Arc<AtomicBool>,
+    session_id: u64,
     injector: &mut dyn KeyInjector,
 ) {
     set_high_priority();
 
     let mut cycle: u64 = 0;
+    let mut last_progress = Instant::now() - Duration::from_millis(16);
 
-    let mut guard = KeyReleaseGuard::new(injector, step_keys(&config.steps), config.hold_right_click);
+    let mut guard =
+        KeyReleaseGuard::new(injector, step_keys(&config.steps), config.hold_right_click);
 
     if config.hold_right_click {
         guard.press_right_click();
     }
 
     while running.load(Ordering::SeqCst) {
-        for step in &config.steps {
+        for (step_index, step) in config.steps.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
                 break;
+            }
+            // Progress is visual-only. Cap it near 60 Hz so zero-delay loops
+            // cannot overwhelm the webview or affect injection timing.
+            if last_progress.elapsed() >= Duration::from_millis(16) {
+                let _ = app.emit(
+                    "macro-step",
+                    serde_json::json!({ "sessionId": session_id, "stepIndex": step_index }),
+                );
+                last_progress = Instant::now();
             }
             match step {
                 SkillStep::Delay { ms } => {
@@ -114,7 +127,7 @@ fn run_skills<R: Runtime>(
         if config.repeat_mode == "count" && cycle >= config.repeat_count.max(1) {
             let _ = app.emit(
                 "macro-finished",
-                serde_json::json!({ "channel": "skills", "cycle": cycle }),
+                serde_json::json!({ "channel": "skills", "cycle": cycle, "reason": "repeat-complete" }),
             );
             running.store(false, Ordering::SeqCst);
             break;
@@ -125,7 +138,12 @@ fn run_skills<R: Runtime>(
 
 /// Spawns the skills loop on a dedicated thread. The caller is responsible for
 /// stopping the channel beforehand (see `start_combo`).
-pub(crate) fn spawn_skills<R: Runtime>(config: SkillConfig, app: &AppHandle<R>, state: &AppState) {
+pub(crate) fn spawn_skills<R: Runtime>(
+    config: SkillConfig,
+    app: &AppHandle<R>,
+    state: &AppState,
+    session_id: u64,
+) {
     if config.steps.is_empty() {
         return;
     }
@@ -135,7 +153,7 @@ pub(crate) fn spawn_skills<R: Runtime>(config: SkillConfig, app: &AppHandle<R>, 
 
     let mut injector = (state.injector_factory)();
     let app = app.clone();
-    let handle = thread::spawn(move || run_skills(config, app, running, &mut *injector));
+    let handle = thread::spawn(move || run_skills(config, app, running, session_id, &mut *injector));
 
     *state.skills.handle.lock() = Some(handle);
 }
@@ -169,8 +187,12 @@ mod tests {
         run_skills(
             SkillConfig::for_test(
                 vec![
-                    SkillStep::KeyDown { key: "Space".into() },
-                    SkillStep::KeyUp { key: "Space".into() },
+                    SkillStep::KeyDown {
+                        key: "Space".into(),
+                    },
+                    SkillStep::KeyUp {
+                        key: "Space".into(),
+                    },
                     SkillStep::KeyDown { key: "F1".into() },
                     SkillStep::KeyUp { key: "F1".into() },
                 ],
@@ -180,6 +202,7 @@ mod tests {
             ),
             app_handle(),
             running.clone(),
+            1,
             &mut injector,
         );
 
@@ -207,7 +230,9 @@ mod tests {
         run_skills(
             SkillConfig::for_test(
                 vec![
-                    SkillStep::KeyDown { key: "VK_999".into() },
+                    SkillStep::KeyDown {
+                        key: "VK_999".into(),
+                    },
                     SkillStep::Delay { ms: 0 },
                     SkillStep::KeyDown { key: "1".into() },
                     SkillStep::KeyUp { key: "1".into() },
@@ -218,6 +243,7 @@ mod tests {
             ),
             app_handle(),
             running.clone(),
+            1,
             &mut injector,
         );
 
@@ -271,6 +297,7 @@ mod tests {
             ),
             app_handle(),
             running.clone(),
+            1,
             &mut injector,
         );
 
@@ -311,6 +338,7 @@ mod tests {
                 ),
                 app_handle(),
                 running_clone,
+                1,
                 &mut injector,
             )
         });
@@ -356,10 +384,15 @@ mod tests {
             ),
             handle,
             running.clone(),
+            1,
             &mut injector,
         );
 
-        assert_eq!(count.load(Ordering::SeqCst), 5, "skills activation fires every cycle");
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            5,
+            "skills activation fires every cycle"
+        );
     }
 
     #[test]
@@ -371,6 +404,7 @@ mod tests {
             SkillConfig::for_test(vec![], false, "loop", 1),
             &app,
             &state,
+            1,
         );
 
         assert!(

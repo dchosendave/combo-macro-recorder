@@ -63,14 +63,43 @@ pub(crate) fn parse_key(raw: &str) -> Option<Key> {
 }
 
 const F_KEYS: [Key; 24] = [
-    Key::F1, Key::F2, Key::F3, Key::F4, Key::F5, Key::F6, Key::F7, Key::F8, Key::F9, Key::F10,
-    Key::F11, Key::F12, Key::F13, Key::F14, Key::F15, Key::F16, Key::F17, Key::F18, Key::F19,
-    Key::F20, Key::F21, Key::F22, Key::F23, Key::F24,
+    Key::F1,
+    Key::F2,
+    Key::F3,
+    Key::F4,
+    Key::F5,
+    Key::F6,
+    Key::F7,
+    Key::F8,
+    Key::F9,
+    Key::F10,
+    Key::F11,
+    Key::F12,
+    Key::F13,
+    Key::F14,
+    Key::F15,
+    Key::F16,
+    Key::F17,
+    Key::F18,
+    Key::F19,
+    Key::F20,
+    Key::F21,
+    Key::F22,
+    Key::F23,
+    Key::F24,
 ];
 
 const NUM_KEYS: [Key; 10] = [
-    Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7,
-    Key::Num8, Key::Num9,
+    Key::Num0,
+    Key::Num1,
+    Key::Num2,
+    Key::Num3,
+    Key::Num4,
+    Key::Num5,
+    Key::Num6,
+    Key::Num7,
+    Key::Num8,
+    Key::Num9,
 ];
 
 /// Releases every key it was constructed with when dropped. The runner loops
@@ -210,7 +239,11 @@ mod tests {
         assert_eq!(parse_key("F0"), None);
         assert_eq!(parse_key("F25"), None);
         assert_eq!(parse_key("Num10"), None);
-        assert_eq!(parse_key("Shift"), None, "modifiers are intentionally unsupported");
+        assert_eq!(
+            parse_key("Shift"),
+            None,
+            "modifiers are intentionally unsupported"
+        );
     }
 
     #[test]
@@ -242,7 +275,10 @@ mod tests {
 
         assert!(result.is_err(), "the inner panic must propagate");
         // Drop ran during unwind, releasing the held key.
-        assert_eq!(log.lock().clone(), vec![InjectedEvent::Release(Key::Unicode('q'))]);
+        assert_eq!(
+            log.lock().clone(),
+            vec![InjectedEvent::Release(Key::Unicode('q'))]
+        );
     }
 }
 
@@ -273,7 +309,12 @@ pub(crate) mod test_utils {
     impl MockInjector {
         pub(crate) fn new_shared() -> (Self, Arc<Mutex<Vec<InjectedEvent>>>) {
             let log = Arc::new(Mutex::new(Vec::new()));
-            (MockInjector { events: log.clone() }, log)
+            (
+                MockInjector {
+                    events: log.clone(),
+                },
+                log,
+            )
         }
 
         /// Builds an injector that appends to a shared log — used by factories

@@ -10,13 +10,14 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use parking_lot::Mutex;
+use serde::Serialize;
 use tauri::{AppHandle, Runtime, State};
 
-pub use focus::AutoStopConfig;
-pub(crate) use processes::{dedupe_for_picker, running_processes_with_details, ProcessInfo};
 use focus::spawn_focus_monitor;
+pub use focus::AutoStopConfig;
 use injector::{EnigoInjector, KeyInjector};
 use potions::{spawn_potions, PotionConfig};
+pub(crate) use processes::{dedupe_for_picker, running_processes_with_details, ProcessInfo};
 use skills::{spawn_skills, SkillConfig};
 
 pub use timing::init_timing;
@@ -42,6 +43,9 @@ pub struct AppState {
     /// spawn and exits when it changes, so a monitor from a stopped combo can
     /// never stop the next one.
     pub(crate) monitor_gen: AtomicU64,
+    /// Backend-issued identity of the current run. Zero means fully stopped.
+    pub(crate) active_session: AtomicU64,
+    session_gen: AtomicU64,
 }
 
 impl Default for AppState {
@@ -52,7 +56,25 @@ impl Default for AppState {
             switch_lock: Mutex::new(()),
             injector_factory: Arc::new(|| Box::new(EnigoInjector::new())),
             monitor_gen: AtomicU64::new(0),
+            active_session: AtomicU64::new(0),
+            session_gen: AtomicU64::new(0),
         }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunnerStatus {
+    session_id: u64,
+    potions_running: bool,
+    skills_running: bool,
+}
+
+fn runner_status(state: &AppState) -> RunnerStatus {
+    RunnerStatus {
+        session_id: state.active_session.load(Ordering::SeqCst),
+        potions_running: state.potions.running.load(Ordering::SeqCst),
+        skills_running: state.skills.running.load(Ordering::SeqCst),
     }
 }
 
@@ -80,8 +102,9 @@ pub fn start_combo(
     skills: Option<SkillConfig>,
     app: AppHandle,
     state: State<'_, AppState>,
-) {
+) -> RunnerStatus {
     start_combo_inner(auto_stop, potions, skills, &app, &state);
+    runner_status(&state)
 }
 
 /// Testable core of `start_combo` — generic over the Tauri runtime so tests can
@@ -98,29 +121,45 @@ pub(crate) fn start_combo_inner<R: Runtime>(
     stop_channel(&state.potions);
     stop_channel(&state.skills);
 
+    let has_channels = potions.is_some() || skills.is_some();
+    if has_channels {
+        let session_id = state.session_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        state.active_session.store(session_id, Ordering::SeqCst);
+    } else {
+        state.active_session.store(0, Ordering::SeqCst);
+    }
+
     if let Some(config) = potions {
         spawn_potions(config, app, state);
     }
     if let Some(config) = skills {
-        spawn_skills(config, app, state);
+        let session_id = state.active_session.load(Ordering::SeqCst);
+        spawn_skills(config, app, state, session_id);
     }
 
     // Invalidate any monitor from a previous combo, then guard this one.
-    let gen = state.monitor_gen.fetch_add(1, Ordering::SeqCst);
+    let gen = state.monitor_gen.fetch_add(1, Ordering::SeqCst) + 1;
     if let Some(config) = auto_stop.filter(|c| c.active()) {
         spawn_focus_monitor(config, gen, app);
     }
 }
 
 #[tauri::command]
-pub fn stop_all(state: State<'_, AppState>) {
+pub fn stop_all(state: State<'_, AppState>) -> RunnerStatus {
     stop_all_inner(&state);
+    runner_status(&state)
+}
+
+#[tauri::command]
+pub fn get_runner_status(state: State<'_, AppState>) -> RunnerStatus {
+    runner_status(&state)
 }
 
 /// Testable core of `stop_all`.
 pub(crate) fn stop_all_inner(state: &AppState) {
     let _guard = state.switch_lock.lock();
     stop_all_locked(&state.potions, &state.skills);
+    state.active_session.store(0, Ordering::SeqCst);
 }
 
 #[cfg(test)]
@@ -191,8 +230,11 @@ mod tests {
         let handle = app.handle().clone();
 
         // potions: single count with zero delay → runs and finishes quickly
-        start_combo_inner(None, 
-            Some(PotionConfig::for_test(true, false, false, false, 0, "count", 1)),
+        start_combo_inner(
+            None,
+            Some(PotionConfig::for_test(
+                true, false, false, false, 0, "count", 1,
+            )),
             None,
             &handle,
             &app.state::<AppState>(),
@@ -202,8 +244,14 @@ mod tests {
         wait_channel_idle(&state, false, false);
 
         let events = log.lock();
-        assert!(events.contains(&InjectedEvent::Press(Key::Unicode('q'))), "potions channel should have injected");
-        assert!(!events.contains(&InjectedEvent::Press(Key::Unicode('w'))), "disabled key must not be injected");
+        assert!(
+            events.contains(&InjectedEvent::Press(Key::Unicode('q'))),
+            "potions channel should have injected"
+        );
+        assert!(
+            !events.contains(&InjectedEvent::Press(Key::Unicode('w'))),
+            "disabled key must not be injected"
+        );
     }
 
     #[test]
@@ -215,8 +263,11 @@ mod tests {
         let handle = app.handle().clone();
 
         // Start an infinite potions loop (long delay → stays alive while we switch).
-        start_combo_inner(None, 
-            Some(PotionConfig::for_test(true, true, true, true, 100, "loop", 1)),
+        start_combo_inner(
+            None,
+            Some(PotionConfig::for_test(
+                true, true, true, true, 100, "loop", 1,
+            )),
             None,
             &handle,
             &app.state::<AppState>(),
@@ -225,15 +276,23 @@ mod tests {
         // Wait until the potions loop has injected at least one press.
         let start = Instant::now();
         loop {
-            if log.lock().iter().any(|e| matches!(e, InjectedEvent::Press(_))) {
+            if log
+                .lock()
+                .iter()
+                .any(|e| matches!(e, InjectedEvent::Press(_)))
+            {
                 break;
             }
-            assert!(start.elapsed() < Duration::from_secs(5), "potions loop never started");
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "potions loop never started"
+            );
             std::thread::sleep(Duration::from_millis(5));
         }
 
         // Switch to skills (count 1 → finishes). Must stop potions first.
-        start_combo_inner(None, 
+        start_combo_inner(
+            None,
             None,
             Some(skill_config(true, "count", 1)),
             &handle,
@@ -251,9 +310,10 @@ mod tests {
 
         // Nothing from the skills channel before the switch…
         assert!(
-            events[..first_skill]
-                .iter()
-                .all(|e| !matches!(e, InjectedEvent::Press(Key::Unicode('b')) | InjectedEvent::Release(Key::Unicode('b')))),
+            events[..first_skill].iter().all(|e| !matches!(
+                e,
+                InjectedEvent::Press(Key::Unicode('b')) | InjectedEvent::Release(Key::Unicode('b'))
+            )),
             "skills events must not appear before potions is stopped"
         );
         // …and nothing from the potions channel after it.
@@ -287,8 +347,11 @@ mod tests {
         let app = build_app(state);
         let handle = app.handle().clone();
 
-        start_combo_inner(None, 
-            Some(PotionConfig::for_test(true, true, true, true, 100, "loop", 1)),
+        start_combo_inner(
+            None,
+            Some(PotionConfig::for_test(
+                true, true, true, true, 100, "loop", 1,
+            )),
             Some(skill_config(false, "loop", 1)),
             &handle,
             &app.state::<AppState>(),
@@ -316,8 +379,11 @@ mod tests {
         let app = build_app(state);
         let handle = app.handle().clone();
 
-        start_combo_inner(None, 
-            Some(PotionConfig::for_test(true, true, true, true, 100, "loop", 1)),
+        start_combo_inner(
+            None,
+            Some(PotionConfig::for_test(
+                true, true, true, true, 100, "loop", 1,
+            )),
             Some(skill_config(false, "loop", 1)),
             &handle,
             &app.state::<AppState>(),
@@ -351,7 +417,8 @@ mod tests {
 
         // Zero delay → cycles run at full speed; the first activation (cycle 10)
         // arrives in microseconds.
-        start_combo_inner(None, 
+        start_combo_inner(
+            None,
             Some(PotionConfig::for_test(true, true, true, true, 0, "loop", 1)),
             None,
             &handle,

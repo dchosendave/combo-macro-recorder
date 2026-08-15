@@ -13,7 +13,10 @@ fn find_rc() -> Option<PathBuf> {
         "HKLM\\SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots",
         "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows Kits\\Installed Roots",
     ] {
-        let out = Command::new("reg.exe").args(["query", key, "/v", "KitsRoot10"]).output().ok()?;
+        let out = Command::new("reg.exe")
+            .args(["query", key, "/v", "KitsRoot10"])
+            .output()
+            .ok()?;
         if !out.status.success() {
             continue;
         }
@@ -96,7 +99,10 @@ fn embed_windows_controls_manifest() {
         .args(["/fo", res_path.to_str().unwrap(), rc_path.to_str().unwrap()])
         .status()
         .expect("failed to run rc.exe");
-    assert!(status.success(), "rc.exe failed to compile the manifest resource");
+    assert!(
+        status.success(),
+        "rc.exe failed to compile the manifest resource"
+    );
 
     // Unqualified link-arg: cargo applies it to every artifact, including the
     // lib test harness (targeted directives like rustc-link-arg-tests do not

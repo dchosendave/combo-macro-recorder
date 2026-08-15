@@ -1,103 +1,72 @@
 # Hamin Macro Recorder
 
-A Tauri + React + TypeScript desktop app that auto-presses potion and skill keys on a timer (targeting MU Online). Combos are built visually or imported from Jitbit Macro Recorder, then triggered by a global hotkey that works while the game is focused.
+A Tauri 2 + React 19 desktop app for building, recording, and globally triggering potion and skill-key macros for MU Online. Real recording, global shortcuts, and input injection target Windows.
 
 ## Features
 
-- **Potion keys** — toggle any of the Q/W/E/R potion keys, with an optional custom delay and Loop or Repeat-N mode.
-- **Skill combo builder** — a step list of keydown/keyup/delay actions with reorder, duplicate, undo/redo, step label styles, and Loop/Repeat-N modes.
-- **Live recording** — press Record, play the combo in the game, and the keystrokes are captured into the step list (Windows only).
-- **Jitbit import** — paste a Jitbit Macro Recorder script to convert it into a skill combo.
-- **Global hotkeys** — multiple named hotkey profiles, each bound to a key and a combo file; pressing the hotkey anywhere starts/stops that combo.
-- **Combo files** — save/open combos as JSON, auto-load the last file on startup, with unsaved-changes protection.
-- **Compact overlay** — while a combo runs, the window collapses into a small always-on-top overlay with elapsed time, activation count, and a stop control (corner configurable).
-- **Dark/light themes**, borderless window with custom title bar.
+- Q/W/E/R potion channel with custom timing and Loop or Repeat N.
+- Skill List and Timeline editors with selection, reorder, copy/cut/paste, bulk delays, disabled steps, undo/redo, and playback speed.
+- System-wide recording with a configurable countdown.
+- Jitbit Macro Recorder import.
+- Named hotkey profiles with Toggle, Hold, Start only, Stop only, and Cycle modes.
+- Optional independent emergency-stop shortcut and focus-loss auto-stop.
+- Atomic combo saves, previous-version backups, explicit recovery, recent files, and auto-load.
+- Compact always-on-top running bar with stop/expand controls and active-step visualization.
+- Replayable in-app Help, light/dark themes, and a borderless custom window.
 
 ## Quick usage
 
-1. Launch the app and create a new combo (or open an existing `.json` file).
-2. In the **Combo → Potions** tab, toggle which potion keys to press.
-3. In the **Combo → Skills** tab, build the skill sequence (or record it live, or paste a Jitbit script).
-4. Save the combo file (Save button in the toolbar).
-5. In the **Hotkeys** tab, add a profile, pick a hotkey, and attach the combo file.
-6. Focus the game and press the hotkey to start; press it again to stop.
+1. Create or open a combo JSON file.
+2. Configure **Combo → Potions** and/or **Combo → Skills**.
+3. Build steps manually, import Jitbit text, or record physical key presses.
+4. Save the combo.
+5. Create a Hotkeys profile, choose its mode, and assign the combo file.
+6. Focus the game and use the shortcut. Use the compact bar, a Stop-only profile, or the optional emergency shortcut to stop safely.
 
-## Combo file format
+The Help item at the bottom of the sidebar provides an always-available feature refresher. The complete workflow is in the [user guide](docs/user-guide.md).
 
-Combos are plain JSON with a `version` field, currently `3`:
+## Combo files
 
-```json
-{
-  "version": 3,
-  "potions": { "enabled": true, "keys": { "q": true, "w": true, "e": false, "r": false }, "...": "..." },
-  "skills": { "enabled": true, "steps": [{ "type": "keydown", "key": "1" }, { "type": "delay", "ms": "120" }, { "type": "keyup", "key": "1" }], "...": "..." }
-}
-```
+New files use JSON format version 4. Versions 2 and 3 remain accepted. Version 4 supports persisted disabled steps and non-destructive playback speed. See the [format specification](docs/combo-file-format.md) for the schema, examples, defaults, and migration rules.
 
-Older versions are migrated automatically on import.
+## Documentation
 
-## Architecture
+Start at the [documentation index](docs/README.md). It links the user guide, architecture, integration contracts, testing, manual QA, security model, and architectural decisions.
 
-For a deep dive into how the app is wired together — command/event contracts, the
-runner's channel model and timing, recording internals, persistence keys, and
-platform constraints — see [`docs/architecture.md`](docs/architecture.md).
+## Windows prerequisites
 
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-
-## Building & running on Windows
-
-Key injection and global hotkeys work fully on Windows (via Win32 `SendInput` and
-`RegisterHotKey`). To build/run there:
-
-### 1. Install prerequisites
-
-1. **Rust (MSVC toolchain)** — install via [rustup](https://rustup.rs/). Accept the
-   default `x86_64-pc-windows-msvc` toolchain.
-2. **Visual Studio C++ Build Tools** — download the
-   [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-   and install the **"Desktop development with C++"** workload.
-3. **WebView2 runtime** — preinstalled on Windows 11. On Windows 10, install the
-   [Evergreen WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
-4. **Node.js** — install the LTS release from [nodejs.org](https://nodejs.org/).
-
-### 2. Get the code and dependencies
+- Rust stable with the `x86_64-pc-windows-msvc` toolchain.
+- Visual Studio C++ Build Tools with **Desktop development with C++**.
+- WebView2 runtime.
+- Node.js and npm.
 
 ```powershell
-git clone <your-repo-url>
-cd combo-macro-recorder
 npm install
-```
-
-### 3. Run in development
-
-```powershell
 npm run tauri dev
 ```
 
-### 4. Build a distributable
+Build installers with:
 
 ```powershell
 npm run tauri build
 ```
 
-The installer/executable is written to `src-tauri/target/release/bundle/`.
+Artifacts are written to `src-tauri/target/release/bundle/`.
 
-## Linux (development notes)
+## Testing
 
-The UI and macro loop logic run on Linux, but on **Wayland** synthetic key injection
-and global hotkeys are blocked by the OS. Use the on-screen START/STOP button to test
-the loop logic (the dev visualizer shows the key sequence). Real injection and global
-hotkeys should be validated on Windows.
-
-If using the X11 (`xdo`) path, install the runtime deps on Fedora:
-
-```bash
-sudo dnf install libX11-devel libxdo-devel
+```powershell
+npm test
+npm run build
+cargo test
 ```
 
-## Troubleshooting
+See [testing.md](docs/testing.md) and [manual-qa.md](docs/manual-qa.md).
 
-- **Hotkeys or key injection don't reach the game.** If the target game runs as administrator, run this app as administrator too — otherwise Windows (UIPI) blocks input injection into it.
-- **Recorded steps come out empty.** Recording polls `GetAsyncKeyState` (Windows only) and works regardless of which window has focus; if nothing was captured, the keys may have been pressed during the 1 ms poll window or were modifier keys (Ctrl/Alt/Shift are intentionally skipped).
+## Platform notes
+
+If the target game runs as administrator, run the recorder as administrator too; Windows UIPI blocks lower-integrity input injection. Wayland/Linux commonly blocks global shortcuts and synthetic input, so validate real behavior on Windows.
+
+## Recommended IDE setup
+
+VS Code with the Tauri extension and rust-analyzer.
