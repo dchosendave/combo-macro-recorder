@@ -66,6 +66,8 @@ type SkillsTabProps = {
   canUndo: boolean
   canRedo: boolean
   onRecordedSteps?: (steps: SkillStep[]) => void
+  /** Whether a combo file is currently open — steers the empty-state hint toward recording/opening when none is. */
+  hasComboFile?: boolean
 }
 
 export function SkillsTab({
@@ -95,6 +97,7 @@ export function SkillsTab({
   canUndo,
   canRedo,
   onRecordedSteps,
+  hasComboFile,
 }: SkillsTabProps) {
   const [comboKeys, setComboKeys] = useState("")
   const [comboDelays, setComboDelays] = useState("")
@@ -697,7 +700,9 @@ export function SkillsTab({
                 <p className="text-xs text-muted-foreground py-2">
                   {locked
                     ? "No steps configured. Unlock to add steps."
-                    : "No steps yet. Add KeyDown, KeyUp, or Delay steps above."}
+                    : hasComboFile
+                      ? "No steps yet. Add KeyDown, KeyUp, or Delay steps above."
+                      : "No steps yet. Record a combo, or open one from the top bar."}
                 </p>
               )}
             </div>

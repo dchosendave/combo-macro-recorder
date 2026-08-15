@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- First-run tutorial: the startup dialog now shows a 4-step "How it works" summary and appears only until dismissed (once), while the Skills tab (no combo file open) and Hotkeys tab (only the default binding) show contextual hints pointing at the next step.
+
 ### Fixed
 
 - Combo-file settings saved while a hotkey preload read was still in flight could be reverted to the pre-save state on the next hotkey press (e.g. the "hold right mouse button" toggle coming back on after save/run/stop). A cache generation guard now re-reads instead of caching stale snapshots.

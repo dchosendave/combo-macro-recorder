@@ -10,6 +10,9 @@ import {
   clearRecentFiles,
   RECENT_FILES_KEY,
   MAX_RECENT_FILES,
+  loadTutorialSeen,
+  saveTutorialSeen,
+  TUTORIAL_SEEN_KEY,
 } from "./persistence"
 
 function seed(raw: string) {
@@ -184,5 +187,26 @@ describe("saveRecentFiles / clearRecentFiles", () => {
     clearRecentFiles()
     expect(localStorage.getItem(RECENT_FILES_KEY)).toBeNull()
     expect(loadRecentFiles()).toEqual([])
+  })
+})
+
+describe("loadTutorialSeen / saveTutorialSeen", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it("is not seen when storage is empty", () => {
+    expect(loadTutorialSeen()).toBe(false)
+  })
+
+  it("is not seen for corrupt values", () => {
+    localStorage.setItem(TUTORIAL_SEEN_KEY, "garbage")
+    expect(loadTutorialSeen()).toBe(false)
+  })
+
+  it("save marks seen and round-trips", () => {
+    saveTutorialSeen()
+    expect(localStorage.getItem(TUTORIAL_SEEN_KEY)).toBe("1")
+    expect(loadTutorialSeen()).toBe(true)
   })
 })

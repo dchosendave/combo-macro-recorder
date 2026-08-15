@@ -69,3 +69,18 @@ export function addRecentPath(paths: string[], path: string): string[] {
 export function clearRecentFiles() {
   localStorage.removeItem(RECENT_FILES_KEY)
 }
+
+export const TUTORIAL_SEEN_KEY = "combo-macro-tutorial-seen"
+
+/** Whether the first-run tutorial has been dismissed at least once. Absent or corrupt values count as not seen. */
+export function loadTutorialSeen(): boolean {
+  try {
+    return localStorage.getItem(TUTORIAL_SEEN_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+export function saveTutorialSeen() {
+  localStorage.setItem(TUTORIAL_SEEN_KEY, "1")
+}

@@ -29,6 +29,7 @@ import { useCompactMode } from "@/runner/use-compact-mode"
 import { useComboFile } from "@/combo-file/use-combo-file"
 import { useRecentFiles } from "@/combo-file/use-recent-files"
 import { useComboFiles } from "@/combo-file/use-combo-files"
+import { useFirstRun } from "@/app/use-first-run"
 import { useGlobalHotkeys } from "@/hotkeys/use-global-hotkeys"
 import { codeToLabel } from "@/shared/keycodes"
 import type { AutoStopConfig } from "@/shared/types"
@@ -131,7 +132,8 @@ function App() {
     },
   })
 
-  const [showStartup, setShowStartup] = useState(true)
+  const { isFirstRun, markTutorialSeen } = useFirstRun()
+  const [showStartup, setShowStartup] = useState(isFirstRun)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [startupChecked, setStartupChecked] = useState(false)
 
@@ -140,9 +142,12 @@ function App() {
     setStartupChecked(true)
     ;(async () => {
       const loaded = await tryAutoLoad()
-      if (loaded) setShowStartup(false)
+      if (loaded) {
+        setShowStartup(false)
+        markTutorialSeen()
+      }
     })()
-  }, [tryAutoLoad, startupChecked])
+  }, [tryAutoLoad, startupChecked, markTutorialSeen])
 
   const runningProfileName = runningProfileIdRef.current
     ? settings.hotkeys.find((p) => p.id === runningProfileIdRef.current)?.name ?? null
@@ -167,8 +172,11 @@ function App() {
 
   const handleStartupOpen = useCallback(async () => {
     const ok = await openFile()
-    if (ok) setShowStartup(false)
-  }, [openFile])
+    if (ok) {
+      setShowStartup(false)
+      markTutorialSeen()
+    }
+  }, [openFile, markTutorialSeen])
 
   const handleOpenRecent = useCallback((path: string) => {
     requestOpenPath(path)
@@ -177,7 +185,13 @@ function App() {
   const handleStartupNew = useCallback(() => {
     newCombo()
     setShowStartup(false)
-  }, [newCombo])
+    markTutorialSeen()
+  }, [newCombo, markTutorialSeen])
+
+  const handleStartupSkip = useCallback(() => {
+    setShowStartup(false)
+    markTutorialSeen()
+  }, [markTutorialSeen])
 
   const handleReset = useCallback(() => {
     invoke("stop_all")
@@ -298,6 +312,7 @@ function App() {
                 canUndo={settings.canUndoSteps}
                 canRedo={settings.canRedoSteps}
                 onRecordedSteps={settings.onRecordedSteps}
+                hasComboFile={currentFilePath !== null}
               />
             )
           ) : activeTab === "profiles" ? (
@@ -326,6 +341,7 @@ function App() {
       open={showStartup}
       onOpen={handleStartupOpen}
       onNew={handleStartupNew}
+      onSkip={handleStartupSkip}
     />
 
     <ConfirmDiscardDialog

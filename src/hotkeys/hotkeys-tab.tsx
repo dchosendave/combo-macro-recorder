@@ -299,6 +299,11 @@ export function HotkeysTab({
           Add Hotkey
         </Button>
 
+        {hotkeys.length === 1 && !hotkeys[0].comboPath && (
+          <p className="text-xs text-muted-foreground">
+            Pick a combo file, then press the hotkey in-game to start.
+          </p>
+        )}
       </CardContent>
     </Card>
   )
