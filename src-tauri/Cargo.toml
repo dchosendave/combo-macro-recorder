@@ -1,6 +1,6 @@
 [package]
 name = "combo-macro-recorder"
-version = "v1.0.11"
+version = "1.0.11"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
