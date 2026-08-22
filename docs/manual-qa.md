@@ -16,7 +16,7 @@ Use this checklist before a release or after changes to Windows integration, lay
 ## Potions and skills editor
 
 - [ ] Minimum 660×720 window remains usable; resizing does not clip card borders or timeline ends.
-- [ ] List and Timeline show the same order and selection.
+- [ ] List and Timeline show the same step order; Timeline remains read-only whether the List editor is locked or unlocked.
 - [ ] Ctrl/Shift selection, Ctrl+A, Delete, Ctrl+D, block drag, and bulk delay operations work.
 - [ ] Dragging from the row body reorders one or multiple selected steps; inputs, key pickers, and action buttons do not accidentally start a drag.
 - [ ] Copy/cut/paste preserves order and assigns independent steps.

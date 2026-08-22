@@ -31,7 +31,7 @@ Unsupported or empty keys block Run. A KeyDown without a later matching KeyUp sh
 
 ### List and Timeline views
 
-List view is best for exact step editing. Timeline view displays cumulative timing and proportional delay blocks. Both edit the same steps.
+List view is the step editor. Timeline view is a read-only visualization of cumulative timing and proportional delay blocks; switch back to List view to add, select, reorder, or change steps.
 
 - Click selects one step.
 - Ctrl-click toggles individual steps.

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react"
 import { ArrowDownToLine, ArrowUpFromLine, Clock3, Focus, LocateFixed, Minus, Plus, SkipBack, SkipForward } from "lucide-react"
 import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
-import { Input } from "@/shared/components/ui/input"
 import { Kbd } from "@/shared/components/ui/kbd"
 import type { SkillStep } from "@/shared/types"
 import { normalizeSkillKey } from "@/shared/skill-keys"
@@ -34,15 +33,11 @@ export function fitTimelineScale(totalMs: number) {
 
 type SkillTimelineProps = {
   steps: SkillStep[]
-  selectedIds: Set<string>
-  locked: boolean
-  onSelect: (id: string, modifiers: { toggle: boolean; range: boolean }) => void
-  onUpdateStep: (id: string, patch: { ms?: string }) => void
   activeStepId?: string | null
   playbackSpeed?: string
 }
 
-export function SkillTimeline({ steps, selectedIds, locked, onSelect, onUpdateStep, activeStepId = null, playbackSpeed = "1" }: SkillTimelineProps) {
+export function SkillTimeline({ steps, activeStepId = null, playbackSpeed = "1" }: SkillTimelineProps) {
   const { items, totalMs } = buildTimeline(steps, playbackSpeed)
   const [manualScale, setManualScale] = useState(1)
   const [fitToView, setFitToView] = useState(true)
@@ -91,54 +86,38 @@ export function SkillTimeline({ steps, selectedIds, locked, onSelect, onUpdateSt
       <div ref={viewportRef} className="min-h-0 min-w-0 w-full max-w-full flex-1 overflow-x-auto overflow-y-hidden pb-2">
         <div className="flex h-full w-max min-w-full items-center gap-1 pl-2">
           {items.map(({ step, startMs, endMs }) => {
-            const selected = selectedIds.has(step.id)
             if (step.type === "delay") {
               const effectiveMs = endMs - startMs
               const width = Math.max(64, Math.min(360, effectiveMs * scale))
               return (
-                <button
+                <div
                   key={step.id}
                   data-step-id={step.id}
-                  type="button"
                   style={{ width }}
                   aria-current={activeStepId === step.id ? "step" : undefined}
-                  className={`relative flex h-24 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-2 transition-colors ${step.disabled ? "opacity-40" : ""} ${activeStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""} ${selected ? "border-primary bg-primary/10 ring-1 ring-primary" : "bg-background hover:bg-muted/50"}`}
-                  onClick={(event) => onSelect(step.id, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })}
+                  className={`relative flex h-24 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-background px-2 transition-colors ${step.disabled ? "opacity-40" : ""} ${activeStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""}`}
                 >
                   {activeStepId === step.id && <span aria-hidden className="absolute -top-5 h-4 w-0.5 rounded-full bg-emerald-500" />}
                   <Clock3 className="size-4 text-muted-foreground" />
-                  {locked ? (
-                    <span className="text-sm font-medium tabular-nums">{effectiveMs} ms</span>
-                  ) : (
-                    <Input
-                      value={step.ms}
-                      inputMode="numeric"
-                      className="h-7 w-20 text-center text-xs"
-                      aria-label={`Delay at ${startMs} milliseconds`}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) => onUpdateStep(step.id, { ms: event.target.value.replace(/[^0-9]/g, "") })}
-                    />
-                  )}
+                  <span className="text-sm font-medium tabular-nums">{effectiveMs} ms</span>
                   <span className="text-[10px] text-muted-foreground">at {startMs} ms</span>
-                </button>
+                </div>
               )
             }
 
             const key = normalizeSkillKey(step.key)
             return (
-              <button
+              <div
                 key={step.id}
                 data-step-id={step.id}
-                type="button"
                 aria-current={activeStepId === step.id ? "step" : undefined}
-                className={`relative flex h-24 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border transition-colors ${step.disabled ? "opacity-40" : ""} ${activeStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""} ${selected ? "border-primary bg-primary/10 ring-1 ring-primary" : key ? "bg-background hover:bg-muted/50" : "border-destructive bg-destructive/5"}`}
-                onClick={(event) => onSelect(step.id, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })}
+                className={`relative flex h-24 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border transition-colors ${step.disabled ? "opacity-40" : ""} ${activeStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""} ${key ? "bg-background" : "border-destructive bg-destructive/5"}`}
               >
                 {activeStepId === step.id && <span aria-hidden className="absolute -top-5 h-4 w-0.5 rounded-full bg-emerald-500" />}
                 {step.type === "keydown" ? <ArrowDownToLine className="size-4 text-blue-500" /> : <ArrowUpFromLine className="size-4 text-amber-500" />}
                 <Kbd>{key ?? "?"}</Kbd>
                 <span className="text-[10px] text-muted-foreground">{step.type === "keydown" ? "Down" : "Up"} · {startMs} ms</span>
-              </button>
+              </div>
             )
           })}
           <div aria-hidden className="w-6 shrink-0" />

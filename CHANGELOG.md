@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Timeline view is now a consistently read-only playback visualization; all step creation and editing stays in List view.
 - Releases are now prepared through an automated Release Please PR, with synchronized app versions, full CI verification, and Windows installers uploaded to a draft GitHub release.
 
 ### Added
