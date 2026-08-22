@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "combo-macro-recorder"
-version = "1.0.12" # x-release-please-version
+version = "1.0.12"
 dependencies = [
  "enigo",
  "parking_lot",
