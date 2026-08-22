@@ -83,6 +83,8 @@ chore(main): release 1.1.0
 
 That rolling PR contains the calculated version changes and generated changelog. More feature and fix PRs can be merged into `main`; Release Please will update the same release PR.
 
+After Release Please updates the authored version files, the release workflow runs the repository version synchronizer on the release branch and commits the generated `Cargo.lock` version. This post-processing step is necessary because Cargo does not preserve updater annotations in its generated lockfile.
+
 Do not normally:
 
 - Edit version fields by hand.
