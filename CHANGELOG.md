@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- Releases are now prepared through an automated Release Please PR, with synchronized app versions, full CI verification, and Windows installers uploaded to a draft GitHub release.
+
 ### Added
 
 - First-run tutorial: the startup dialog now shows a 4-step "How it works" summary and appears only until dismissed (once), while the Skills tab (no combo file open) and Hotkeys tab (only the default binding) show contextual hints pointing at the next step.

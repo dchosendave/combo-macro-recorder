@@ -20,7 +20,7 @@ Tauri 2 + React 19 + TypeScript desktop app ("Hamin Macro Recorder") for auto-pr
 
 ## Versioning / release
 
-Version is duplicated in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`. Bump all three with `scripts/bump-version.ps1 <ver>` (bash equivalent: `bump-version.sh`), and add a `CHANGELOG.md` entry. Publishing a `v*` tag triggers `.github/workflows/release.yml` (Windows-only) which builds and uploads a draft GitHub release — no manual installer steps. `.github/workflows/test.yml` runs the full test suite on every push/PR.
+Release Please derives SemVer bumps from Conventional Commits on `main` and maintains a release PR. Merging that PR creates a forced `v*` tag plus a draft GitHub release; `.github/workflows/release.yml` then verifies, tests, builds, and uploads the Windows installers. Versions must agree across `package.json`, both lockfiles, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`; CI enforces this with `npm run version:check`. For an emergency local bump, use `scripts/bump-version.ps1 <ver>` (bash equivalent: `bump-version.sh`), which updates all five locations. Prefer `feat:`, `fix:`, and `feat!:`/`BREAKING CHANGE:` commits so automatic minor, patch, and major bumps are correct.
 
 ## Architecture
 

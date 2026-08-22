@@ -73,4 +73,6 @@ Every bug fix should first gain the smallest test that would have failed before 
 
 ## CI
 
-`.github/workflows/test.yml` runs frontend and Rust tests on `windows-latest` for pushes and pull requests. Publishing a `v*` tag runs the Windows release workflow and creates a draft release with installers.
+`.github/workflows/test.yml` checks version consistency, typechecks/builds the frontend, and runs frontend and Rust tests on `windows-latest` for pushes and pull requests. On `main`, Release Please maintains a version/changelog PR from Conventional Commits. Merging that PR creates a forced `v*` tag and draft release; the Windows release job validates the tag, repeats the full checks, and uploads MSI and NSIS installers to that draft.
+
+Repository Actions settings must allow GitHub Actions to create pull requests. The workflow uses `RELEASE_PLEASE_TOKEN` when configured and otherwise falls back to `GITHUB_TOKEN`; a fine-grained token is useful when release-PR pushes need to trigger normal pull-request checks.
