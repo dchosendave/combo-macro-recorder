@@ -276,6 +276,7 @@ export function SkillsTab({
   }
 
   const handleGlobalKeyDown = (e: React.KeyboardEvent) => {
+    if (editorView !== "list") return
     const target = e.target as HTMLElement
     const isEditable = target instanceof HTMLInputElement
       || target instanceof HTMLTextAreaElement
@@ -408,17 +409,22 @@ export function SkillsTab({
 
             {/* Row 1: Labels, actions, and lock */}
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">Labels:</span>
-              <Select value={labelStyle} onValueChange={(v) => setLabelStyle(v as StepLabelStyle)}>
-                <SelectTrigger className="h-7 w-[120px] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+              {editorView === "list" && (
+                <>
+                  <span className="text-xs text-muted-foreground">Labels:</span>
+                  <Select value={labelStyle} onValueChange={(v) => setLabelStyle(v as StepLabelStyle)}>
+                    <SelectTrigger className="h-7 w-[120px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
                   <SelectItem value="abbreviation">KD / KU / DL</SelectItem>
                   <SelectItem value="icon">↓ / ↑ / ⏱</SelectItem>
                 </SelectContent>
               </Select>
+                </>
+              )}
 
+              <span className="text-xs text-muted-foreground">View:</span>
               <Select value={editorView} onValueChange={(value) => {
                 if (!value) return
                 const view = value as "list" | "timeline"
@@ -429,12 +435,12 @@ export function SkillsTab({
                 <SelectContent>
                   <SelectItem value="list">List view</SelectItem>
                   <SelectItem value="timeline">Timeline</SelectItem>
-                </SelectContent>
-              </Select>
+                    </SelectContent>
+                  </Select>
 
               <div className="flex-1" />
 
-              {!locked && (
+              {!locked && editorView === "list" && (
                 <>
                   <Dialog open={comboOpen} onOpenChange={setComboOpen}>
                     <Tooltip>
@@ -506,7 +512,7 @@ export function SkillsTab({
                 </>
               )}
 
-              {!locked && (
+              {!locked && editorView === "list" && (
                 <>
                   <Tooltip>
                     <TooltipTrigger
@@ -545,26 +551,30 @@ export function SkillsTab({
                 </>
               )}
 
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="size-8"
-                      aria-label={locked ? "Unlock editing" : "Lock editing"}
-                      onClick={() => setLocked((l) => !l)}
-                    >
-                      {locked ? <Lock className="size-3.5" /> : <LockOpen className="size-3.5" />}
-                    </Button>
-                  }
-                />
-                <TooltipContent>{locked ? "Unlock editing" : "Lock editing"}</TooltipContent>
-              </Tooltip>
+              {editorView === "list" ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8"
+                        aria-label={locked ? "Unlock editing" : "Lock editing"}
+                        onClick={() => setLocked((l) => !l)}
+                      >
+                        {locked ? <Lock className="size-3.5" /> : <LockOpen className="size-3.5" />}
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>{locked ? "Unlock editing" : "Lock editing"}</TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className="text-xs text-muted-foreground">Read-only</span>
+              )}
             </div>
 
             {/* Row 2: Add-step buttons (only when unlocked) */}
-            {!locked && (
+            {!locked && editorView === "list" && (
               <div className="flex items-center gap-1.5 animate-in fade-in-0 duration-200">
                 <Button
                   variant="outline"
@@ -633,7 +643,7 @@ export function SkillsTab({
               </div>
             )}
 
-            {!locked && (selectedIds.size > 0 || stepClipboard.length > 0) && (
+            {!locked && editorView === "list" && (selectedIds.size > 0 || stepClipboard.length > 0) && (
               <StepSelectionInspector
                 selectedCount={selectedIds.size}
                 selectedDelayCount={selectedDelayCount}
@@ -878,10 +888,6 @@ export function SkillsTab({
             ) : (
               <SkillTimeline
                 steps={steps}
-                selectedIds={selectedIds}
-                locked={locked}
-                onSelect={selectStep}
-                onUpdateStep={onUpdateStep}
                 activeStepId={activeRunStepId}
                 playbackSpeed={playbackSpeed}
               />
