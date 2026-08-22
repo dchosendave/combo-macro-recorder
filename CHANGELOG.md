@@ -35,6 +35,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Combo file import degrading malformed `potions`/`skills` fields to defaults instead of leaking garbage or crashing.
 - `set_hotkeys` partially mutating registered shortcuts when a registration failed; it now re-registers removed keys (best-effort rollback) and returns the error without changing state.
 
+## [1.0.12](https://github.com/dchosendave/combo-macro-recorder/compare/v1.0.11...v1.0.12) (2026-08-22)
+
+
+### Bug Fixes
+
+* **ci:** automate and harden releases ([a6d7fe8](https://github.com/dchosendave/combo-macro-recorder/commit/a6d7fe82b56694dbdf5754b079be75cec57e4aa9))
+
 ## [1.0.7] - 2026-07-23
 
 ### Fixed
