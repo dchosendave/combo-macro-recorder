@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag to rebuild (for example, v1.0.12); leave empty to only run Release Please
+        required: false
+        type: string
 
 concurrency:
   group: release-main
@@ -12,6 +17,7 @@ concurrency:
 
 jobs:
   release-please:
+    if: ${{ github.event_name == 'push' || inputs.tag == '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -29,7 +35,7 @@ jobs:
 
   build-draft-release:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: ${{ always() && (needs.release-please.outputs.release_created == 'true' || inputs.tag != '') }}
     runs-on: windows-latest
     timeout-minutes: 35
     permissions:
@@ -38,7 +44,7 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -56,11 +62,13 @@ jobs:
           workspaces: src-tauri
       - name: Validate release tag and version metadata
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
         run: |
           npm run version:check
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne "${{ needs.release-please.outputs.tag_name }}") {
-            throw "Release tag ${{ needs.release-please.outputs.tag_name }} does not match app version v$version"
+          if ("v$version" -ne $env:RELEASE_TAG) {
+            throw "Release tag $env:RELEASE_TAG does not match app version v$version"
           }
       - name: Typecheck and build frontend
         run: npm run build
@@ -69,11 +77,11 @@ jobs:
       - name: Backend tests
         run: cargo test --locked
       - name: Build Tauri installers
-        run: npx tauri build --locked
+        run: npx tauri build -- --locked
       - name: Upload installers to draft release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          tag_name: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
           draft: true
           files: |
             src-tauri/target/release/bundle/msi/*.msi

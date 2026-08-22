@@ -14,6 +14,7 @@ This directory is the maintained reference for Hamin Macro Recorder. Prefer the 
 - [Integration contracts](contracts.md) — Tauri commands/events, local storage, validation, and change coordination.
 - [Combo file format](combo-file-format.md) — v4 schema and compatibility rules.
 - [Testing](testing.md) — automated test conventions and CI expectations.
+- [Development and release workflow](development-workflow.md) — branches, Conventional Commits, release PRs, and draft publication.
 - [Security](security.md) — CSP, permissions, file access, global input, and elevation.
 - [Architecture decisions](decisions/README.md) — why consequential designs exist.
 
