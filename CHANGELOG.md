@@ -36,6 +36,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Combo file import degrading malformed `potions`/`skills` fields to defaults instead of leaking garbage or crashing.
 - `set_hotkeys` partially mutating registered shortcuts when a registration failed; it now re-registers removed keys (best-effort rollback) and returns the error without changing state.
 
+## [1.0.13](https://github.com/dchosendave/combo-macro-recorder/compare/v1.0.12...v1.0.13) (2026-08-22)
+
+
+### Bug Fixes
+
+* **ci:** synchronize cargo lockfile in release prs ([f70a0e0](https://github.com/dchosendave/combo-macro-recorder/commit/f70a0e0ad9b77b0451a3b32483240918a11df0db))
+* **ci:** synchronize cargo lockfile in release prs ([25a6aa6](https://github.com/dchosendave/combo-macro-recorder/commit/25a6aa67039399bb1ae3c208757bb8b275e92673))
+* **ui:** make timeline view readonly ([c6b4cb9](https://github.com/dchosendave/combo-macro-recorder/commit/c6b4cb9e16b671a0c6d91190569fc62e351efc6b))
+* **ui:** make timeline view readonly ([af7df07](https://github.com/dchosendave/combo-macro-recorder/commit/af7df07176b488892ad80b284da16c5740171c4c))
+
 ## [1.0.12](https://github.com/dchosendave/combo-macro-recorder/compare/v1.0.11...v1.0.12) (2026-08-22)
 
 
