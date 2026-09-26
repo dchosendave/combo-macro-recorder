@@ -6,3 +6,5 @@ ADRs preserve the reason behind consequential choices. They are append-only hist
 - [0002 — Atomic combo saves and explicit recovery](0002-atomic-combo-saves.md)
 - [0003 — Polling-based Windows recorder](0003-recorder-polling.md)
 - [0004 — Combo file format v4](0004-combo-format-v4.md)
+
+- [0005 - Profile execution and channel key ownership](0005-profile-execution-and-key-ownership.md)

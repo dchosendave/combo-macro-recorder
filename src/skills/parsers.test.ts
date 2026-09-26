@@ -30,6 +30,14 @@ const FIXTURES: Record<string, string> = {
   ].join("\n"),
 }
 
+it("rejects partial delay/action syntax and reports unsupported keys", () => {
+  for (const row of ["DELAY : 1.5", "DELAY : 100oops", "Keyboard : A : KeyDownOops"]) {
+    expect(parseJitbitFile(row)).toHaveProperty("rejected")
+  }
+  expect(parseJitbitFile("Keyboard : LCTRL : KeyDown\nKeyboard : A : KeyDown : 0 : 1 : 0"))
+    .toMatchObject({ skippedKeys: ["LCTRL"], steps: [{ type: "keydown", key: "A" }] })
+})
+
 describe("parseJitbit from .mcr fixtures", () => {
   it("parses skill-combo.mcr correctly", () => {
     expect(stripId(parseJitbit(FIXTURES["skill-combo.mcr"]))).toEqual([

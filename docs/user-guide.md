@@ -14,7 +14,7 @@ In **Combo → Potions**:
 
 1. Enable the potion channel.
 2. Select any of Q, W, E, and R.
-3. Optionally set a custom hold duration. The minimum is 2 ms.
+3. Optionally set a custom hold duration. Use whole milliseconds from 2 to 86400000.
 4. Choose Loop or Repeat N.
 
 ## Skills
@@ -62,7 +62,7 @@ Stopping recording converts timestamp differences into Delay steps. Modifier key
 
 ## Save and recovery
 
-Save writes JSON atomically: the app syncs a sibling temporary file and replaces the primary file. Once a file already exists, its previous good contents are retained as `<file>.bak`.
+Save writes JSON atomically: the app syncs a sibling temporary file and replaces the primary file. Once a file already exists, its previous contents are retained as `<file>.bak`. Save does not validate those previous contents; the backup is not guaranteed to be valid if the primary was already damaged.
 
 If opening the primary file fails and the backup is valid, the app offers recovery. Confirming recovery replaces the damaged primary while retaining a usable backup. Cancel leaves files unchanged.
 
@@ -76,7 +76,7 @@ Each named profile has a shortcut, run mode, and combo-file assignment:
 - **Stop only** — stops the current macro.
 - **Cycle** — advances through an ordered list of combo files and wraps.
 
-Cycle mode skips unavailable files and warns. A shortcut cannot conflict with another profile or the emergency-stop shortcut. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness.
+Cycle mode skips unavailable files and warns. Shortcut editing checks profile and emergency-stop conflicts. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness. New profiles start without a shortcut. Numpad shortcuts remain distinct from top-row digits.
 
 ## Running and stopping
 
@@ -84,9 +84,15 @@ Run validates the enabled channels and waits for backend confirmation. The windo
 
 Stop from the compact bar, the configured hotkey mode, the main header, or the optional emergency-stop shortcut. Emergency stop is intentionally unset until configured in Settings.
 
-After stopping, the header identifies the last outcome: manual, emergency, Repeat complete, focus lost, profile switched, or start failed.
+After stopping, the header identifies the last outcome: manual, emergency, Repeat complete, focus lost, profile switched, start failed, or injection failed.
 
-Auto-stop can watch a selected game process. After that game has been focused once, losing focus for the grace period stops both channels.
+Auto-stop can watch a selected game process. After that game has been focused once, another foreground process remaining focused for the grace period stops both channels. A sample with no foreground window currently resets the grace timer.
+
+Saved profiles run independently of the editor: triggering B while editing A leaves A's edits and save target intact. Playback highlighting applies only to runs started from the current editor. Hold release cancels pending startup as well as active playback. Leaving Skills cancels recording; emergency stop also cancels pending recorder startup.
+
+New/Open/Save/recovery cannot overlap. Native close (including Alt+F4) asks before discarding edits and waits while a file operation is active. Reset stops the runner before clearing settings. Always-on-top is restored at application startup.
+
+Repeat counts must be whole numbers; delays must be finite whole milliseconds, with a maximum effective delay of one day. Concurrent potion and skill channels cannot use the same Q/W/E/R keys; remove the overlap before starting. Jitbit import rejects malformed delay rows and warns about unsupported keyboard tokens.
 
 ## Settings
 

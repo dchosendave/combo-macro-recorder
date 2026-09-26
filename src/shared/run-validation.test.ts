@@ -15,6 +15,14 @@ function skillConfig(overrides: Partial<SkillConfig> = {}): SkillConfig {
 const KEY_Q = { q: true, w: false, e: false, r: false }
 
 describe("derivePotionRun", () => {
+  it.each(["oops", "Infinity", "1.5", "9007199254740992"])("rejects unsafe potion numbers: %s", (value) => {
+    const delay = derivePotionRun(potionConfig({ enabled: true, customDelay: true, delayMs: value }))
+    const count = derivePotionRun(potionConfig({ enabled: true, repeatMode: "count", repeatCount: value }))
+    expect(delay.canRun).toBe(false)
+    expect(count.canRun).toBe(false)
+    expect(Number.isSafeInteger(delay.config.delayMs)).toBe(true)
+    expect(Number.isSafeInteger(count.config.repeatCount)).toBe(true)
+  })
   it("cannot run when disabled", () => {
     const r = derivePotionRun(potionConfig({ enabled: false }))
     expect(r.canRun).toBe(false)
@@ -67,9 +75,9 @@ describe("derivePotionRun", () => {
     expect(r.config.repeatCount).toBe(1)
   })
 
-  it("does not flag a non-numeric repeat count but falls back to MIN_REPEAT", () => {
+  it("flags a non-numeric repeat count and uses a safe fallback", () => {
     const r = derivePotionRun(potionConfig({ enabled: true, keys: KEY_Q, repeatMode: "count", repeatCount: "abc" }))
-    expect(r.repeatError).toBe(false)
+    expect(r.repeatError).toBe(true)
     expect(r.config.repeatCount).toBe(1)
   })
 
@@ -92,6 +100,11 @@ describe("derivePotionRun", () => {
 })
 
 describe("deriveSkillRun", () => {
+  it.each(["oops", "Infinity", "1.5", "-1", "86400001"])("blocks invalid enabled skill delay %s", (ms) => {
+    const result = deriveSkillRun(skillConfig({ enabled: true, steps: [{ id: "a", type: "keydown", key: "A" }, { id: "d", type: "delay", ms }] }))
+    expect(result.canRun).toBe(false)
+    expect(result.delayError).toBe(true)
+  })
   it("cannot run when disabled", () => {
     const r = deriveSkillRun(skillConfig({ enabled: false, steps: [{ id: "s1", type: "keydown", key: "a" }] }))
     expect(r.canRun).toBe(false)

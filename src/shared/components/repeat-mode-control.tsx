@@ -56,7 +56,7 @@ export function RepeatModeControl({
         <p
           className={`text-xs animate-in fade-in-0 duration-200 ${repeatError ? "text-destructive" : "text-muted-foreground"}`}
         >
-          {repeatError ? "Minimum is 1." : "How many times to repeat."}
+          {repeatError ? "Enter a whole number of at least 1." : "How many times to repeat."}
         </p>
       )}
     </div>

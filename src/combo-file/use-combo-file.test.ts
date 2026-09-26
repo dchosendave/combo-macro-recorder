@@ -37,6 +37,28 @@ beforeEach(() => {
 })
 
 describe("useComboFile", () => {
+  it("blocks New and duplicate saves until an active save finishes", async () => {
+    const { hook, applyCombo } = setup()
+    const deferred = Promise.withResolvers<void>()
+    saveMock.mockResolvedValue(PATH)
+    invokeMock.mockImplementation((command) => command === "save_file" ? deferred.promise : Promise.resolve(undefined))
+    let saving!: Promise<void>
+    await act(async () => { saving = hook.result.current.saveFile() })
+    await act(async () => { hook.result.current.requestNew(); await hook.result.current.saveFile() })
+    expect(applyCombo).not.toHaveBeenCalled()
+    expect(invokeMock.mock.calls.filter(([command]) => command === "save_file")).toHaveLength(1)
+    await act(async () => { deferred.resolve(); await saving })
+    expect(hook.result.current.currentFilePath).toBe(PATH)
+    expect(hook.result.current.isProcessing).toBe(false)
+  })
+
+  it("recovery invalidates the same saved-file cache as Save", async () => {
+    const { hook, onSave } = setup()
+    invokeMock.mockImplementation((command) => command === "read_file" ? Promise.reject("damaged") : Promise.resolve(OPENED_CONTENT))
+    await act(async () => { await hook.result.current.openPath(PATH) })
+    await act(async () => { await hook.result.current.confirmRecovery() })
+    expect(onSave).toHaveBeenCalledWith(PATH)
+  })
   it("tracks dirtiness against a baseline and clears it on save", async () => {
     const { combo, applyCombo, onSave, hook, rerender } = setup()
     expect(hook.result.current.isDirty).toBe(false)

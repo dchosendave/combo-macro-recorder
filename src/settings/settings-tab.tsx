@@ -31,7 +31,7 @@ import {
 } from "@/shared/components/ui/select"
 import { useComboFiles } from "@/combo-file/use-combo-files"
 import { useRunningProcesses } from "@/settings/use-running-processes"
-import { codeToLabel } from "@/shared/keycodes"
+import { codeToLabel, codeToShortcut } from "@/shared/keycodes"
 import type { AutoStopConfig, CompactCorner, HotkeyBinding } from "@/shared/types"
 import { RECORD_COUNTDOWN_KEY } from "@/recorder/use-recorder"
 
@@ -88,7 +88,7 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
       if (event.metaKey) parts.push("Meta")
       parts.push(event.code)
       const shortcut = parts.join("+")
-      const duplicate = profileHotkeys.find((profile) => profile.hotkey === shortcut)
+      const duplicate = profileHotkeys.find((profile) => codeToShortcut(profile.hotkey).toLowerCase() === codeToShortcut(shortcut).toLowerCase())
       if (duplicate) {
         toast.error(`Hotkey already used by "${duplicate.name}"`)
         return
@@ -114,9 +114,13 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
   }, [processQuery, processes])
 
   const toggleAlwaysOnTop = async (v: boolean) => {
-    setAlwaysOnTop(v)
-    localStorage.setItem("combo-macro-always-on-top", String(v))
-    await getCurrentWindow().setAlwaysOnTop(v)
+    try {
+      await getCurrentWindow().setAlwaysOnTop(v)
+      setAlwaysOnTop(v)
+      localStorage.setItem("combo-macro-always-on-top", String(v))
+    } catch (error) {
+      toast.error(`Always on top failed: ${error}`)
+    }
   }
 
   const toggleAutoLoad = (v: boolean) => {

@@ -10,6 +10,8 @@ This directory is the maintained reference for Hamin Macro Recorder. Prefer the 
 
 ## For maintainers and AI assistants
 
+- [Implementation summary (2026-09-27)](implementation-summary-2026-09-27.md) - full audit and implementation handoff, verification, artifacts, and next steps.
+- [Functional audit](functional-audit.md) — implemented fixes, verification results, and remaining functionality-first release checks.
 - [Architecture](architecture.md) — ownership, major flows, concurrency, and platform constraints.
 - [Integration contracts](contracts.md) — Tauri commands/events, local storage, validation, and change coordination.
 - [Combo file format](combo-file-format.md) — v4 schema and compatibility rules.

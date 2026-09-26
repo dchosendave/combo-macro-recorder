@@ -153,4 +153,4 @@ or:
 ./scripts/bump-version.sh 1.0.13
 ```
 
-Both commands update the three version manifests and both lockfiles. Run `npm run version:check` afterward. Return to the automated release path as soon as the blocking issue is resolved.
+Both commands update the three version manifests and both lockfiles. Run `npm run version:check` afterward. The helpers print the current release workflow guidance. Pushing a tag alone does not trigger installer packaging. Use the normal release PR path or the explicit workflow-dispatch tag rebuild described above. Return to the automated release path as soon as the blocking issue is resolved.

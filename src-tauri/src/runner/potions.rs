@@ -47,7 +47,7 @@ impl PotionConfig {
     }
 }
 
-fn enabled_potion_keys(keys: &Keys) -> Vec<char> {
+pub(crate) fn enabled_potion_keys(keys: &Keys) -> Vec<char> {
     let mut seq = Vec::new();
     if keys.q {
         seq.push('q');
@@ -74,14 +74,15 @@ fn run_potions<R: Runtime>(
     config: PotionConfig,
     app: AppHandle<R>,
     running: Arc<AtomicBool>,
+    session_id: u64,
     injector: &mut dyn KeyInjector,
-) {
+) -> Result<(), String> {
     set_high_priority();
 
     let sequence = enabled_potion_keys(&config.keys);
     if sequence.is_empty() {
         running.store(false, Ordering::SeqCst);
-        return;
+        return Ok(());
     }
 
     let mut guard = KeyReleaseGuard::new(
@@ -97,28 +98,32 @@ fn run_potions<R: Runtime>(
             if !running.load(Ordering::SeqCst) {
                 break;
             }
-            guard.press(Key::Unicode(*ch));
+            guard.press(Key::Unicode(*ch))?;
             sleep_precise(config.delay_ms, &running);
-            guard.release(Key::Unicode(*ch));
+            guard.release(Key::Unicode(*ch))?;
         }
+        if !running.load(Ordering::SeqCst) { break; }
         cycle += 1;
         if cycle % 10 == 0 {
             let _ = app.emit(
                 "macro-activation",
-                serde_json::json!({ "channel": "potions", "cycle": cycle, "keys": sequence }),
+                serde_json::json!({ "sessionId": session_id, "channel": "potions", "cycle": cycle, "keys": sequence }),
             );
         }
 
         if config.repeat_mode == "count" && cycle >= config.repeat_count.max(1) {
+            drop(guard);
+            if let Some(error) = injector.error() { return Err(error); }
+            running.store(false, Ordering::SeqCst);
             let _ = app.emit(
                 "macro-finished",
-                serde_json::json!({ "channel": "potions", "cycle": cycle, "reason": "repeat-complete" }),
+                serde_json::json!({ "sessionId": session_id, "channel": "potions", "cycle": cycle, "reason": "repeat-complete" }),
             );
-            running.store(false, Ordering::SeqCst);
-            break;
+            return Ok(());
         }
     }
     // guard drops here: releases the full sequence
+    Ok(())
 }
 
 /// Spawns the potions loop on a dedicated thread. The caller is responsible for
@@ -127,15 +132,19 @@ pub(crate) fn spawn_potions<R: Runtime>(
     config: PotionConfig,
     app: &AppHandle<R>,
     state: &AppState,
-) {
+) -> Result<(), String> {
+    let mut injector = (state.injector_factory)();
+    if let Some(error) = injector.error() { return Err(error); }
     let running = state.potions.running.clone();
     running.store(true, Ordering::SeqCst);
 
-    let mut injector = (state.injector_factory)();
+    let session_id = state.active_session.load(Ordering::SeqCst);
     let app = app.clone();
-    let handle = thread::spawn(move || run_potions(config, app, running, &mut *injector));
+    let handle = thread::spawn(move || super::run_worker(&app, &running, session_id, "potions", &mut *injector,
+        |injector| run_potions(config, app.clone(), running.clone(), session_id, injector)));
 
     *state.potions.handle.lock() = Some(handle);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -193,8 +202,9 @@ mod tests {
             PotionConfig::for_test(true, true, false, false, 0, "count", 1),
             app_handle(),
             running.clone(),
+            1,
             &mut injector,
-        );
+        ).unwrap();
 
         assert_eq!(
             injector.log().lock().clone(),
@@ -223,8 +233,9 @@ mod tests {
             PotionConfig::for_test(true, false, false, false, 0, "count", 0),
             app_handle(),
             running.clone(),
+            1,
             &mut injector,
-        );
+        ).unwrap();
 
         let events = injector.log().lock().clone();
         assert_eq!(
@@ -249,13 +260,14 @@ mod tests {
                 PotionConfig::for_test(true, true, true, true, 100, "loop", 1),
                 app_handle(),
                 running_clone,
+                1,
                 &mut injector,
             )
         });
 
         std::thread::sleep(std::time::Duration::from_millis(30));
         running.store(false, Ordering::SeqCst);
-        handle.join().unwrap();
+        handle.join().unwrap().unwrap();
 
         let events = log.lock().clone();
         assert!(
@@ -300,8 +312,9 @@ mod tests {
             PotionConfig::for_test(false, false, false, false, 0, "loop", 1),
             app_handle(),
             running.clone(),
+            1,
             &mut injector,
-        );
+        ).unwrap();
 
         assert!(!running.load(Ordering::SeqCst));
         assert!(injector.log().lock().is_empty());
@@ -324,8 +337,9 @@ mod tests {
             PotionConfig::for_test(true, true, true, true, 0, "count", 25),
             handle,
             running.clone(),
+            1,
             &mut injector,
-        );
+        ).unwrap();
 
         assert_eq!(
             count.load(Ordering::SeqCst),

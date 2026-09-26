@@ -124,7 +124,7 @@ export function KeysTab({
               }`}
           >
             {delayError
-              ? `Minimum is ${MIN_DELAY}ms.`
+              ? `Enter whole milliseconds from ${MIN_DELAY} to 86400000.`
               : `Digits only. Lowest is ${MIN_DELAY}ms.`}
           </p>
         </div>

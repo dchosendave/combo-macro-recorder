@@ -13,13 +13,11 @@ const MARGIN = 0
 /** Collapses the window to a 500x38 overlay (outer size — ~30px client area) parked in a screen corner while a combo runs, restoring size/position/min-size constraints on exit. `auto` corner picks the corner matching the window center relative to the work area. */
 export function useCompactMode() {
   const [compactMode, setCompactMode] = useState(false)
-  const [savedSize, setSavedSize] = useState<LogicalSize | null>(null)
   const [compactCorner, setCompactCornerState] = useState<CompactCorner>(() => {
     return (localStorage.getItem(CORNER_KEY) as CompactCorner) || "auto"
   })
 
   const compactModeRef = useRef(compactMode)
-  compactModeRef.current = compactMode
 
   const compactCornerRef = useRef(compactCorner)
   compactCornerRef.current = compactCorner
@@ -27,28 +25,52 @@ export function useCompactMode() {
   const savedPositionRef = useRef<PhysicalPosition | null>(null)
   const savedPhysSizeRef = useRef<PhysicalSize | null>(null)
   const previousAlwaysOnTopRef = useRef(false)
+  const queueRef = useRef<Promise<void>>(Promise.resolve())
+  const enqueue = useCallback((operation: () => Promise<void>) => {
+    const result = queueRef.current.then(operation, operation)
+    queueRef.current = result.catch(() => {})
+    return result
+  }, [])
+  const restore = useCallback(async () => {
+    const size = savedPhysSizeRef.current
+    if (!size) return
+    const win = getCurrentWindow()
+    let failure: unknown
+    for (const operation of [
+      () => win.setResizable(true),
+      () => win.setSize(size),
+      () => savedPositionRef.current ? win.setPosition(savedPositionRef.current) : Promise.resolve(),
+      () => win.setSizeConstraints(MIN_CONSTRAINTS),
+      () => win.setAlwaysOnTop(previousAlwaysOnTopRef.current),
+    ]) {
+      try { await operation() } catch (error) { failure ??= error }
+    }
+    await invoke("set_hard_corners", { enabled: false }).catch(() => {})
+    compactModeRef.current = false
+    setCompactMode(false)
+    if (failure) throw failure
+    savedPhysSizeRef.current = null
+  }, [])
 
   const setCompactCorner = useCallback((corner: CompactCorner) => {
     setCompactCornerState(corner)
     localStorage.setItem(CORNER_KEY, corner)
   }, [])
 
-  const enterCompact = useCallback(async () => {
+  const enterCompact = useCallback(() => enqueue(async () => {
     if (compactModeRef.current) return
     try {
       const win = getCurrentWindow()
       const current = await win.innerSize()
-      setSavedSize(new LogicalSize(current))
-
-      savedPhysSizeRef.current = new PhysicalSize(current.width, current.height)
       savedPositionRef.current = await win.outerPosition()
+      previousAlwaysOnTopRef.current = await win.isAlwaysOnTop()
+      savedPhysSizeRef.current = new PhysicalSize(current.width, current.height)
 
       await win.setSizeConstraints(null)
       await win.setResizable(true)
       await win.setSize(COMPACT)
       await win.setResizable(false)
 
-      previousAlwaysOnTopRef.current = await win.isAlwaysOnTop()
       await win.setAlwaysOnTop(true)
 
       const monitor = await currentMonitor()
@@ -113,33 +135,21 @@ export function useCompactMode() {
       // default). Cosmetic — never fail compact mode over it.
       invoke("set_hard_corners", { enabled: true }).catch(() => {})
 
+      compactModeRef.current = true
       setCompactMode(true)
     } catch (e) {
       toast.error(`Compact mode failed: ${e}`)
+      try { await restore() } catch (error) { toast.error(`Restore mode failed: ${error}`) }
     }
-  }, [])
+  }), [enqueue, restore])
 
-  const exitCompact = useCallback(async () => {
-    if (!compactModeRef.current) return
+  const exitCompact = useCallback(() => enqueue(async () => {
     try {
-      const win = getCurrentWindow()
-
-      // Restore the system default corner rounding.
-      invoke("set_hard_corners", { enabled: false }).catch(() => {})
-
-      const savedPos = savedPositionRef.current
-      if (savedPos) {
-        await win.setPosition(savedPos)
-      }
-      await win.setSize(savedSize ?? new LogicalSize(660, 720))
-      await win.setResizable(true)
-      await win.setSizeConstraints(MIN_CONSTRAINTS)
-      await win.setAlwaysOnTop(previousAlwaysOnTopRef.current)
+      await restore()
     } catch (e) {
       toast.error(`Restore mode failed: ${e}`)
     }
-    setCompactMode(false)
-  }, [savedSize])
+  }), [enqueue, restore])
 
   return { compactMode, compactCorner, setCompactCorner, enterCompact, exitCompact }
 }
