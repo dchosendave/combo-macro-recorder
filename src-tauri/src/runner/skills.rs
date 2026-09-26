@@ -63,8 +63,8 @@ fn step_keys(steps: &[SkillStep]) -> Vec<Key> {
 }
 
 /// Skills loop: optionally holds right-click for the whole run, then executes the
-/// step list (delay/keydown/keyup) each cycle. Emits `macro-activation` every
-/// cycle and `macro-finished` once when Repeat-N is reached.
+/// step list (delay/keydown/keyup) each cycle. Caps `macro-activation` near 60 Hz
+/// and emits `macro-finished` once when Repeat-N is reached.
 ///
 /// All presses go through a [`KeyReleaseGuard`], whose `Drop` releases the
 /// right-click and every step key on normal return, Repeat-N completion,
@@ -75,17 +75,18 @@ fn run_skills<R: Runtime>(
     running: Arc<AtomicBool>,
     session_id: u64,
     injector: &mut dyn KeyInjector,
-) {
+) -> Result<(), String> {
     set_high_priority();
 
     let mut cycle: u64 = 0;
     let mut last_progress = Instant::now() - Duration::from_millis(16);
+    let mut last_activation = last_progress;
 
     let mut guard =
         KeyReleaseGuard::new(injector, step_keys(&config.steps), config.hold_right_click);
 
     if config.hold_right_click {
-        guard.press_right_click();
+        guard.press_right_click()?;
     }
 
     while running.load(Ordering::SeqCst) {
@@ -108,32 +109,39 @@ fn run_skills<R: Runtime>(
                 }
                 SkillStep::KeyDown { key } => {
                     if let Some(key) = parse_key(key) {
-                        guard.press(key);
+                        guard.press(key)?;
                     }
                 }
                 SkillStep::KeyUp { key } => {
                     if let Some(key) = parse_key(key) {
-                        guard.release(key);
+                        guard.release(key)?;
                     }
                 }
             }
         }
+        if !running.load(Ordering::SeqCst) { break; }
         cycle += 1;
-        let _ = app.emit(
+        if last_activation.elapsed() >= Duration::from_millis(16) {
+          let _ = app.emit(
             "macro-activation",
-            serde_json::json!({ "channel": "skills", "cycle": cycle }),
-        );
+            serde_json::json!({ "sessionId": session_id, "channel": "skills", "cycle": cycle }),
+          );
+          last_activation = Instant::now();
+        }
 
         if config.repeat_mode == "count" && cycle >= config.repeat_count.max(1) {
+            drop(guard);
+            if let Some(error) = injector.error() { return Err(error); }
+            running.store(false, Ordering::SeqCst);
             let _ = app.emit(
                 "macro-finished",
-                serde_json::json!({ "channel": "skills", "cycle": cycle, "reason": "repeat-complete" }),
+                serde_json::json!({ "sessionId": session_id, "channel": "skills", "cycle": cycle, "reason": "repeat-complete" }),
             );
-            running.store(false, Ordering::SeqCst);
-            break;
+            return Ok(());
         }
     }
     // guard drops here: releases right-click then all step keys
+    Ok(())
 }
 
 /// Spawns the skills loop on a dedicated thread. The caller is responsible for
@@ -143,19 +151,21 @@ pub(crate) fn spawn_skills<R: Runtime>(
     app: &AppHandle<R>,
     state: &AppState,
     session_id: u64,
-) {
+) -> Result<(), String> {
     if config.steps.is_empty() {
-        return;
+        return Ok(());
     }
-
+    let mut injector = (state.injector_factory)();
+    if let Some(error) = injector.error() { return Err(error); }
     let running = state.skills.running.clone();
     running.store(true, Ordering::SeqCst);
 
-    let mut injector = (state.injector_factory)();
     let app = app.clone();
-    let handle = thread::spawn(move || run_skills(config, app, running, session_id, &mut *injector));
+    let handle = thread::spawn(move || super::run_worker(&app, &running, session_id, "skills", &mut *injector,
+        |injector| run_skills(config, app.clone(), running.clone(), session_id, injector)));
 
     *state.skills.handle.lock() = Some(handle);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -204,7 +214,7 @@ mod tests {
             running.clone(),
             1,
             &mut injector,
-        );
+        ).unwrap();
 
         assert_eq!(
             injector.log().lock().clone(),
@@ -245,7 +255,7 @@ mod tests {
             running.clone(),
             1,
             &mut injector,
-        );
+        ).unwrap();
 
         assert_eq!(
             injector.log().lock().clone(),
@@ -299,7 +309,7 @@ mod tests {
             running.clone(),
             1,
             &mut injector,
-        );
+        ).unwrap();
 
         assert_eq!(
             injector.log().lock().clone(),
@@ -345,7 +355,7 @@ mod tests {
 
         std::thread::sleep(std::time::Duration::from_millis(30));
         running.store(false, Ordering::SeqCst);
-        handle.join().unwrap();
+        handle.join().unwrap().unwrap();
 
         let events = log.lock().clone();
         assert_eq!(
@@ -360,7 +370,8 @@ mod tests {
     }
 
     #[test]
-    fn activation_event_fired_every_cycle() {
+    fn activation_events_are_throttled() {
+        let started = Instant::now();
         let handle = app_handle();
         let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let count_clone = count.clone();
@@ -386,13 +397,12 @@ mod tests {
             running.clone(),
             1,
             &mut injector,
-        );
+        ).unwrap();
 
-        assert_eq!(
-            count.load(Ordering::SeqCst),
-            5,
-            "skills activation fires every cycle"
-        );
+        let emitted = count.load(Ordering::SeqCst);
+        assert!(emitted >= 1);
+        assert!(emitted <= 1 + started.elapsed().as_millis() as usize / 16,
+            "activation frequency must stay bounded even if the test is descheduled");
     }
 
     #[test]
@@ -405,7 +415,7 @@ mod tests {
             &app,
             &state,
             1,
-        );
+        ).unwrap();
 
         assert!(
             state.skills.handle.lock().is_none(),

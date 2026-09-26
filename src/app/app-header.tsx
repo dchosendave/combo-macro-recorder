@@ -87,6 +87,7 @@ export function AppHeader({
     "focus-lost": "Focus lost",
     "profile-switch": "Profile switched",
     "startup-failure": "Start failed",
+    "injection-failure": "Input failed",
   }
 
   return (
@@ -174,7 +175,7 @@ export function AppHeader({
             variant="default"
             className="bg-green-600 text-white hover:bg-green-700"
             onClick={onToggleRunning}
-            disabled={!canRun || isProcessing}
+            disabled={!running && (!canRun || isProcessing)}
           >
             <Play className="size-4" />
             Run

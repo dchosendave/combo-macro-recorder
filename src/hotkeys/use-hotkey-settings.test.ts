@@ -20,7 +20,7 @@ describe("useHotkeySettings", () => {
     expect(result.current.hotkeys).toHaveLength(2)
     const added = result.current.hotkeys[1]
     expect(added.name).toBe("Hotkey 2")
-    expect(added.hotkey).toBe("F5")
+    expect(added.hotkey).toBe("")
     expect(added.comboPath).toBe("")
     expect(added.id).not.toBe("")
     expect(added.id).not.toBe("h1")

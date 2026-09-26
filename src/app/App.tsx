@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { invoke } from "@tauri-apps/api/core"
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
+import { toast } from "sonner"
+import { useCloseGuard } from "@/app/use-close-guard"
 import { SidebarInset, SidebarProvider } from "@/shared/components/ui/sidebar"
 import { AppHeader } from "@/app/app-header"
 import { AppSidebar } from "@/app/app-sidebar"
 import { TitleBar } from "@/app/title-bar"
 import { HelpDialog } from "@/app/help-dialog"
 import { KeysTab } from "@/potions/keys-tab"
-import { SkillsTab } from "@/skills/skills-tab"
-import { HotkeysTab } from "@/hotkeys/hotkeys-tab"
-import { SettingsTab } from "@/settings/settings-tab"
 import { CompactOverlay } from "@/runner/compact-overlay"
 import { StartupDialog } from "@/combo-file/startup-dialog"
 import { ConfirmDiscardDialog } from "@/combo-file/confirm-discard-dialog"
@@ -38,6 +36,10 @@ import { codeToLabel } from "@/shared/keycodes"
 import type { AutoStopConfig } from "@/shared/types"
 import "./App.css"
 
+const SkillsTab = lazy(() => import("@/skills/skills-tab").then((module) => ({ default: module.SkillsTab })))
+const HotkeysTab = lazy(() => import("@/hotkeys/hotkeys-tab").then((module) => ({ default: module.HotkeysTab })))
+const SettingsTab = lazy(() => import("@/settings/settings-tab").then((module) => ({ default: module.SettingsTab })))
+
 const AUTO_STOP_KEY = "combo-macro-auto-stop"
 const EMERGENCY_HOTKEY_KEY = "combo-macro-emergency-hotkey"
 
@@ -45,6 +47,10 @@ function App() {
   const settings = useSettings()
   const { compactMode, compactCorner, setCompactCorner, enterCompact, exitCompact } = useCompactMode()
   useWindowFit()
+  useEffect(() => {
+    void getCurrentWindow().setAlwaysOnTop(localStorage.getItem("combo-macro-always-on-top") === "true")
+      .catch((error) => toast.error(`Always on top failed: ${error}`))
+  }, [])
 
   const runningProfileIdRef = useRef<string | null>(null)
   const [emergencyHotkey, setEmergencyHotkey] = useState(
@@ -86,6 +92,8 @@ function App() {
 
   const {
     anyRunning,
+    potionsRunning,
+    skillsRunning,
     elapsed,
     totalCycles,
     activeSkillStepIndex,
@@ -119,7 +127,6 @@ function App() {
     startCurrentCombo: () => startCombo(toRunnerInputs(getCombo())),
     startCombo,
     stopAll,
-    applyCombo: settings.applyCombo,
     runningProfileIdRef,
   })
 
@@ -158,7 +165,7 @@ function App() {
 
   const { isFirstRun, markTutorialSeen } = useFirstRun()
   const [showStartup, setShowStartup] = useState(isFirstRun)
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const { showCloseConfirm, requestClose: handleRequestClose, confirmClose: handleCloseConfirm, cancelClose: handleCloseCancel } = useCloseGuard(isDirty, isProcessing)
   const [showHelp, setShowHelp] = useState(false)
   const [startupChecked, setStartupChecked] = useState(false)
 
@@ -177,23 +184,6 @@ function App() {
   const runningProfileName = runningProfileIdRef.current
     ? settings.hotkeys.find((p) => p.id === runningProfileIdRef.current)?.name ?? null
     : null
-
-  const handleRequestClose = useCallback(() => {
-    if (isDirty) {
-      setShowCloseConfirm(true)
-    } else {
-      getCurrentWindow().close()
-    }
-
-  }, [isDirty])
-
-  const handleCloseConfirm = () => {
-    getCurrentWindow().close()
-  }
-
-  const handleCloseCancel = () => {
-    setShowCloseConfirm(false)
-  }
 
   const handleStartupOpen = useCallback(async () => {
     const ok = await openFile()
@@ -218,12 +208,12 @@ function App() {
     markTutorialSeen()
   }, [markTutorialSeen])
 
-  const handleReset = useCallback(() => {
-    invoke("stop_all")
+  const handleReset = useCallback(async () => {
+    if (isProcessing || !await stopAll()) return
+    window.dispatchEvent(new Event("macro-emergency-stop"))
     settings.reset()
     newCombo()
-    exitCompact()
-  }, [settings, exitCompact, newCombo])
+  }, [settings, stopAll, newCombo, isProcessing])
 
   const [activeTab, setActiveTab] = useState<"combo" | "profiles" | "settings">("combo")
   const [innerTab, setInnerTab] = useState<"potions" | "skills">("potions")
@@ -245,11 +235,11 @@ function App() {
       <CompactOverlay
         elapsed={elapsed}
         activations={totalCycles}
-        potionsActive={settings.potionsCanRun}
-        skillsActive={settings.skillsCanRun}
+        potionsActive={potionsRunning}
+        skillsActive={skillsRunning}
         hotkey={codeToLabel(settings.hotkey)}
         profileName={runningProfileName}
-        onStop={() => toggleRunning()}
+        onStop={() => { void stopAll() }}
         onExpand={() => { void exitCompact() }}
       />
     )
@@ -295,6 +285,7 @@ function App() {
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden animate-in fade-in-0 duration-200">
+          <Suspense fallback={<div role="status">Loading...</div>}>
           {activeTab === "combo" ? (
             innerTab === "potions" ? (
               <KeysTab
@@ -339,6 +330,7 @@ function App() {
                 setPlaybackSpeed={settings.setPlaybackSpeed}
                 repeatError={settings.skillsRepeatError}
                 keyError={settings.skillsKeyError}
+                delayError={settings.skillsDelayError}
                 unmatchedKeydowns={settings.unmatchedKeydowns}
                 onUndo={settings.undoSteps}
                 onRedo={settings.redoSteps}
@@ -346,7 +338,7 @@ function App() {
                 canRedo={settings.canRedoSteps}
                 onRecordedSteps={settings.onRecordedSteps}
                 hasComboFile={currentFilePath !== null}
-                activeRunStepIndex={activeSkillStepIndex}
+                activeRunStepIndex={runningProfileIdRef.current ? null : activeSkillStepIndex}
                 runnerActive={anyRunning}
               />
             )
@@ -377,6 +369,7 @@ function App() {
               profileHotkeys={settings.hotkeys}
             />
           )}
+          </Suspense>
         </div>
       </SidebarInset>
     </SidebarProvider>

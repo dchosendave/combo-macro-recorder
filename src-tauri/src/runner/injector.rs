@@ -8,6 +8,7 @@ pub(crate) trait KeyInjector: Send {
     fn release(&mut self, key: Key);
     fn press_right_click(&mut self);
     fn release_right_click(&mut self);
+    fn error(&self) -> Option<String> { None }
 }
 
 /// Maps a step key string to an injectable enigo key.
@@ -125,16 +126,19 @@ impl<'a> KeyReleaseGuard<'a> {
         }
     }
 
-    pub(crate) fn press(&mut self, key: Key) {
+    pub(crate) fn press(&mut self, key: Key) -> Result<(), String> {
         self.injector.press(key);
+        self.injector.error().map_or(Ok(()), Err)
     }
 
-    pub(crate) fn release(&mut self, key: Key) {
+    pub(crate) fn release(&mut self, key: Key) -> Result<(), String> {
         self.injector.release(key);
+        self.injector.error().map_or(Ok(()), Err)
     }
 
-    pub(crate) fn press_right_click(&mut self) {
+    pub(crate) fn press_right_click(&mut self) -> Result<(), String> {
         self.injector.press_right_click();
+        self.injector.error().map_or(Ok(()), Err)
     }
 }
 
@@ -149,40 +153,43 @@ impl Drop for KeyReleaseGuard<'_> {
     }
 }
 
-/// Real injection via enigo (Win32 `SendInput` on Windows). If enigo can't be
-/// created, injection is silently skipped — same behavior as the original code.
-pub(crate) struct EnigoInjector(Option<Enigo>);
+/// Retains the first error while still attempting every cleanup release.
+pub(crate) struct EnigoInjector { enigo: Option<Enigo>, error: Option<String> }
 
 impl EnigoInjector {
     pub(crate) fn new() -> Self {
-        EnigoInjector(Enigo::new(&Settings::default()).ok())
+        match Enigo::new(&Settings::default()) {
+            Ok(enigo) => Self { enigo: Some(enigo), error: None },
+            Err(error) => Self { enigo: None, error: Some(error.to_string()) },
+        }
     }
 }
 
 impl KeyInjector for EnigoInjector {
     fn press(&mut self, key: Key) {
-        if let Some(enigo) = self.0.as_mut() {
-            let _ = enigo.key(key, Direction::Press);
+        if let Some(enigo) = self.enigo.as_mut() {
+            if let Err(error) = enigo.key(key, Direction::Press) { self.error.get_or_insert(error.to_string()); }
         }
     }
 
     fn release(&mut self, key: Key) {
-        if let Some(enigo) = self.0.as_mut() {
-            let _ = enigo.key(key, Direction::Release);
+        if let Some(enigo) = self.enigo.as_mut() {
+            if let Err(error) = enigo.key(key, Direction::Release) { self.error.get_or_insert(error.to_string()); }
         }
     }
 
     fn press_right_click(&mut self) {
-        if let Some(enigo) = self.0.as_mut() {
-            let _ = enigo.button(Button::Right, Direction::Press);
+        if let Some(enigo) = self.enigo.as_mut() {
+            if let Err(error) = enigo.button(Button::Right, Direction::Press) { self.error.get_or_insert(error.to_string()); }
         }
     }
 
     fn release_right_click(&mut self) {
-        if let Some(enigo) = self.0.as_mut() {
-            let _ = enigo.button(Button::Right, Direction::Release);
+        if let Some(enigo) = self.enigo.as_mut() {
+            if let Err(error) = enigo.button(Button::Right, Direction::Release) { self.error.get_or_insert(error.to_string()); }
         }
     }
+    fn error(&self) -> Option<String> { self.error.clone() }
 }
 
 #[cfg(test)]

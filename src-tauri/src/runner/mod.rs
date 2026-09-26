@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::{AppHandle, Runtime, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 
 use focus::spawn_focus_monitor;
 pub use focus::AutoStopConfig;
@@ -21,10 +21,60 @@ pub(crate) use processes::{dedupe_for_picker, running_processes_with_details, Pr
 use skills::{spawn_skills, SkillConfig};
 
 pub use timing::init_timing;
+pub(crate) const MAX_DELAY: u64 = 86_400_000;
+
+fn validate_configs(potions: Option<&PotionConfig>, skills: Option<&SkillConfig>) -> Result<(), String> {
+    let repeat = |mode: &str, count: u64| {
+        if !matches!(mode, "loop" | "count") || !(1..=999_999).contains(&count) {
+            Err("Repeat mode/count is invalid".to_string())
+        } else { Ok(()) }
+    };
+    if let Some(p) = potions {
+        repeat(&p.repeat_mode, p.repeat_count)?;
+        if !(2..=MAX_DELAY).contains(&p.delay_ms) || potions::enabled_potion_keys(&p.keys).is_empty() {
+            return Err("Potions require a selected key and a delay from 2 to 86400000 ms".into());
+        }
+    }
+    if let Some(s) = skills {
+        repeat(&s.repeat_mode, s.repeat_count)?;
+        if !s.steps.iter().any(|step| matches!(step, skills::SkillStep::KeyDown { .. })) {
+            return Err("Skills require a keydown step".into());
+        }
+        for step in &s.steps {
+            match step {
+                skills::SkillStep::Delay { ms } if *ms > MAX_DELAY => return Err("Skill delay exceeds one day".into()),
+                skills::SkillStep::KeyDown { key } | skills::SkillStep::KeyUp { key } => {
+                    if injector::parse_key(key).is_none() { return Err(format!("Unsupported key: {key}")); }
+                    if potions.is_some_and(|p| potions::enabled_potion_keys(&p.keys).iter().any(|ch| key.trim().eq_ignore_ascii_case(&ch.to_string()))) {
+                        return Err(format!("Key {key} is used by both potions and skills; disable one channel or remove the overlap"));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Creates the key injector used by a spawned channel. Tests swap in a mock
 /// factory so no real keys are ever sent.
 pub(crate) type InjectorFactory = Arc<dyn Fn() -> Box<dyn KeyInjector> + Send + Sync>;
+
+pub(crate) fn run_worker<R: Runtime>(
+    app: &AppHandle<R>, running: &AtomicBool, session_id: u64, channel: &str,
+    injector: &mut dyn KeyInjector,
+    operation: impl FnOnce(&mut dyn KeyInjector) -> Result<(), String>,
+) {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| operation(injector)))
+        .unwrap_or_else(|_| Err("Input worker panicked".into()));
+    running.store(false, Ordering::SeqCst);
+    if let Some(error) = result.err().or_else(|| injector.error()) {
+        let _ = app.emit("macro-finished", serde_json::json!({
+            "sessionId": session_id, "channel": channel, "cycle": 0,
+            "reason": "injection-failure", "error": error,
+        }));
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct ChannelState {
@@ -102,9 +152,9 @@ pub fn start_combo(
     skills: Option<SkillConfig>,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> RunnerStatus {
-    start_combo_inner(auto_stop, potions, skills, &app, &state);
-    runner_status(&state)
+) -> Result<RunnerStatus, String> {
+    validate_configs(potions.as_ref(), skills.as_ref())?;
+    start_combo_inner(auto_stop, potions, skills, &app, &state)
 }
 
 /// Testable core of `start_combo` — generic over the Tauri runtime so tests can
@@ -115,7 +165,7 @@ pub(crate) fn start_combo_inner<R: Runtime>(
     skills: Option<SkillConfig>,
     app: &AppHandle<R>,
     state: &AppState,
-) {
+) -> Result<RunnerStatus, String> {
     let _guard = state.switch_lock.lock();
 
     stop_channel(&state.potions);
@@ -130,11 +180,18 @@ pub(crate) fn start_combo_inner<R: Runtime>(
     }
 
     if let Some(config) = potions {
-        spawn_potions(config, app, state);
+        if let Err(error) = spawn_potions(config, app, state) {
+            state.active_session.store(0, Ordering::SeqCst);
+            return Err(error);
+        }
     }
     if let Some(config) = skills {
         let session_id = state.active_session.load(Ordering::SeqCst);
-        spawn_skills(config, app, state, session_id);
+        if let Err(error) = spawn_skills(config, app, state, session_id) {
+            stop_all_locked(&state.potions, &state.skills);
+            state.active_session.store(0, Ordering::SeqCst);
+            return Err(error);
+        }
     }
 
     // Invalidate any monitor from a previous combo, then guard this one.
@@ -142,16 +199,21 @@ pub(crate) fn start_combo_inner<R: Runtime>(
     if let Some(config) = auto_stop.filter(|c| c.active()) {
         spawn_focus_monitor(config, gen, app);
     }
+    Ok(runner_status(state))
 }
 
 #[tauri::command]
 pub fn stop_all(state: State<'_, AppState>) -> RunnerStatus {
-    stop_all_inner(&state);
+    let _guard = state.switch_lock.lock();
+    stop_all_locked(&state.potions, &state.skills);
+    state.active_session.store(0, Ordering::SeqCst);
+    state.monitor_gen.fetch_add(1, Ordering::SeqCst);
     runner_status(&state)
 }
 
 #[tauri::command]
 pub fn get_runner_status(state: State<'_, AppState>) -> RunnerStatus {
+    let _guard = state.switch_lock.lock();
     runner_status(&state)
 }
 
@@ -160,6 +222,7 @@ pub(crate) fn stop_all_inner(state: &AppState) {
     let _guard = state.switch_lock.lock();
     stop_all_locked(&state.potions, &state.skills);
     state.active_session.store(0, Ordering::SeqCst);
+    state.monitor_gen.fetch_add(1, Ordering::SeqCst);
 }
 
 #[cfg(test)]
@@ -175,6 +238,56 @@ mod tests {
     use tauri::{Listener, Manager};
 
     const POTION_CHARS: [char; 4] = ['q', 'w', 'e', 'r'];
+
+    #[test]
+    fn validates_delay_repeat_keys_and_channel_overlap() {
+        let mut potion = PotionConfig::for_test(true, false, false, false, 2, "loop", 1);
+        let mut skill = skill_config(false, "count", 1);
+        assert!(validate_configs(Some(&potion), Some(&skill)).is_ok());
+        potion.delay_ms = u64::MAX;
+        assert!(validate_configs(Some(&potion), None).is_err());
+        potion.delay_ms = 2;
+        skill.repeat_mode = "typo".into();
+        assert!(validate_configs(None, Some(&skill)).is_err());
+        skill.repeat_mode = "count".into();
+        skill.steps = vec![SkillStep::KeyDown { key: "Q".into() }];
+        assert!(validate_configs(Some(&potion), Some(&skill)).is_err());
+        skill.steps = vec![SkillStep::KeyDown { key: "not-a-key".into() }];
+        assert!(validate_configs(None, Some(&skill)).is_err());
+        skill.steps = vec![SkillStep::KeyDown { key: "A".into() }, SkillStep::Delay { ms: MAX_DELAY + 1 }];
+        assert!(validate_configs(None, Some(&skill)).is_err());
+        assert!(serde_json::from_value::<PotionConfig>(serde_json::json!({
+            "keys": {"q": true, "w": false, "e": false, "r": false},
+            "delayMs": 2, "repeatMode": "count", "repeatCount": 1.5
+        })).is_err());
+    }
+
+    #[test]
+    fn worker_errors_and_panics_clear_state_and_emit_session_failure() {
+        let app = build_app(AppState::default());
+        let failures = Arc::new(Mutex::new(Vec::new()));
+        let received = failures.clone();
+        app.listen("macro-finished", move |event| {
+            received.lock().push(serde_json::from_str::<serde_json::Value>(event.payload()).unwrap());
+        });
+        for panic in [false, true] {
+            let running = AtomicBool::new(true);
+            let mut injector = MockInjector::default();
+            let log = injector.log();
+            run_worker(app.handle(), &running, 7, "skills", &mut injector, |injector| {
+                let _release = injector::KeyReleaseGuard::new(injector, vec![Key::Unicode('a')], false);
+                if panic { panic!("test worker panic"); }
+                Err("test injection error".into())
+            });
+            assert!(!running.load(Ordering::SeqCst));
+            assert_eq!(log.lock().last(), Some(&InjectedEvent::Release(Key::Unicode('a'))));
+        }
+        assert_eq!(failures.lock().len(), 2);
+        for failure in failures.lock().iter() {
+            assert_eq!(failure["sessionId"], 7);
+            assert_eq!(failure["reason"], "injection-failure");
+        }
+    }
 
     fn build_app(state: AppState) -> tauri::App<tauri::test::MockRuntime> {
         tauri::test::mock_builder()
@@ -238,7 +351,7 @@ mod tests {
             None,
             &handle,
             &app.state::<AppState>(),
-        );
+        ).unwrap();
 
         let state = app.state::<AppState>();
         wait_channel_idle(&state, false, false);
@@ -271,7 +384,7 @@ mod tests {
             None,
             &handle,
             &app.state::<AppState>(),
-        );
+        ).unwrap();
 
         // Wait until the potions loop has injected at least one press.
         let start = Instant::now();
@@ -297,7 +410,7 @@ mod tests {
             Some(skill_config(true, "count", 1)),
             &handle,
             &app.state::<AppState>(),
-        );
+        ).unwrap();
 
         let state = app.state::<AppState>();
         wait_channel_idle(&state, false, false);
@@ -332,7 +445,7 @@ mod tests {
         let app = build_app(AppState::default());
         let handle = app.handle().clone();
 
-        start_combo_inner(None, None, None, &handle, &app.state::<AppState>());
+        start_combo_inner(None, None, None, &handle, &app.state::<AppState>()).unwrap();
 
         let state = app.state::<AppState>();
         assert!(!state.potions.running.load(Ordering::SeqCst));
@@ -355,7 +468,7 @@ mod tests {
             Some(skill_config(false, "loop", 1)),
             &handle,
             &app.state::<AppState>(),
-        );
+        ).unwrap();
 
         let state = app.state::<AppState>();
         assert!(state.potions.running.load(Ordering::SeqCst));
@@ -387,7 +500,7 @@ mod tests {
             Some(skill_config(false, "loop", 1)),
             &handle,
             &app.state::<AppState>(),
-        );
+        ).unwrap();
 
         stop_all_inner(&app.state::<AppState>());
         stop_all_inner(&app.state::<AppState>());
@@ -423,7 +536,7 @@ mod tests {
             None,
             &handle,
             &app.state::<AppState>(),
-        );
+        ).unwrap();
 
         let start = Instant::now();
         while count.load(Ordering::SeqCst) == 0 {

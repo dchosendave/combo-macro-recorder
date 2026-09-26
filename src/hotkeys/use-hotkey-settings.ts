@@ -10,7 +10,7 @@ export function useHotkeySettings(initial: HotkeyBinding[]) {
       {
         id: crypto.randomUUID(),
         name: `Hotkey ${prev.length + 1}`,
-        hotkey: "F5",
+        hotkey: "",
         comboPath: "",
         mode: "toggle",
         comboPaths: [],

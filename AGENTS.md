@@ -16,7 +16,7 @@ Tauri 2 + React 19 + TypeScript desktop app ("Hamin Macro Recorder") for auto-pr
 - Global Tauri/sonner mocks live in `src/test/setup.ts`; typed accessors and event dispatch in `src/test/tauri-utils.ts` (`invokeMock`, `listenMock`, `toastMock`, `fireTauriEvent`). Hook tests MUST set `invokeMock.mockResolvedValue(undefined)` in `beforeEach` (hooks chain `.catch` on `invoke` results) and wrap async flows in `await act(async () => { ... })`. `fireTauriEvent` wraps the payload as `{ payload }` — handlers read `event.payload`.
 - `src/skills/parsers.test.ts` uses inline `.mcr`-style fixtures (no external files), so the suite runs on a fresh clone. The old `macros/` fixture dir and `__snapshots__/` are gitignored leftovers — don't re-add them, and don't introduce new snapshot-based tests (they can't be committed).
 - Rust tests must run on Windows. `src-tauri/build.rs` embeds a Common-Controls v6 manifest into every artifact — without it, tauri-linked test binaries crash at load with `0xc0000139` because `comctl32!TaskDialogIndirect` only exists in the WinSxS v6 copy that manifests activate (tauri-apps/tauri#13419). Don't remove that block. The app binary itself gets an identical manifest from tauri-build.
-- CI: `.github/workflows/test.yml` runs `npm test` + `cargo test` on `windows-latest` for every push/PR.
+- CI: `.github/workflows/test.yml` checks versions, builds the frontend, and runs `npm test` + `cargo test` on `windows-latest` for pushes to `main` and pull requests. Release Please lives in `.github/workflows/release.yml`.
 
 ## Versioning / release
 

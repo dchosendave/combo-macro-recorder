@@ -6,6 +6,7 @@ import type {
 } from "./types"
 
 export const MIN_DELAY = 2
+export const MAX_DELAY = 86_400_000 // One day per effective delay, also enforced by Rust.
 export const MIN_REPEAT = 1
 export const MAX_REPEAT = 999999
 

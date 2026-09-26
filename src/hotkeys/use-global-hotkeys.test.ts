@@ -87,14 +87,52 @@ beforeEach(() => {
 })
 
 describe("useGlobalHotkeys", () => {
+  it("stops a hold released before startup acknowledgement", async () => {
+    const deferred = Promise.withResolvers<boolean>()
+    const startCurrentCombo = vi.fn(() => deferred.promise)
+    const { stopAll, ref } = renderHotkeys({ hotkeys: [{ ...PROFILE_P2, mode: "hold" }], startCurrentCombo })
+    let press!: Promise<void>
+    await act(async () => { press = fireHotkey("p2") })
+    await act(async () => { await fireHotkey("p2", "released") })
+    await act(async () => { deferred.resolve(true); await press })
+    expect(stopAll).toHaveBeenCalledTimes(1)
+    expect(ref.current).toBeNull()
+  })
+
+  it("cancels a hold released during file loading", async () => {
+    const { reads, mock } = deferredReads()
+    invokeMock.mockImplementation(mock)
+    const { startCombo, ref } = renderHotkeys({ hotkeys: [{ ...PROFILE_P1, mode: "hold" }] })
+    let press!: Promise<void>
+    await act(async () => { press = fireHotkey("p1") })
+    await act(async () => { await fireHotkey("p1", "released") })
+    await act(async () => {
+      for (const read of reads) read.resolve(exportComboToString(COMBO_1))
+      await press
+    })
+    expect(startCombo).not.toHaveBeenCalled()
+    expect(ref.current).toBeNull()
+  })
+
+  it("a live-combo toggle cancels an older file load", async () => {
+    const { reads, mock } = deferredReads()
+    invokeMock.mockImplementation(mock)
+    const { startCombo, toggleRunning } = renderHotkeys()
+    let press!: Promise<void>
+    await act(async () => { press = fireHotkey("p1") })
+    await act(async () => { await fireHotkey("p2") })
+    await act(async () => { for (const read of reads) read.resolve(exportComboToString(COMBO_1)); await press })
+    expect(startCombo).not.toHaveBeenCalled()
+    expect(toggleRunning).toHaveBeenCalledTimes(1)
+  })
   const setHotkeysCalls = () =>
     invokeMock.mock.calls.filter(([cmd]) => cmd === "set_hotkeys")
 
-  it("registers shortcuts (debounced) with codeToShortcut applied", () => {
+  it("registers shortcuts (debounced) with codeToShortcut applied", async () => {
     vi.useFakeTimers()
     const { rerender, props } = renderHotkeys()
-    act(() => {
-      vi.advanceTimersByTime(50)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50)
     })
     expect(setHotkeysCalls()).toHaveLength(1)
     expect(invokeMock).toHaveBeenCalledWith("set_hotkeys", {
@@ -109,8 +147,8 @@ describe("useGlobalHotkeys", () => {
     invokeMock.mockClear()
     props.hotkeys = [PROFILE_P2]
     rerender()
-    act(() => {
-      vi.advanceTimersByTime(50)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50)
     })
     expect(setHotkeysCalls()).toHaveLength(1)
     expect(invokeMock).toHaveBeenCalledWith("set_hotkeys", {
@@ -122,7 +160,7 @@ describe("useGlobalHotkeys", () => {
     vi.useFakeTimers()
     const onEmergencyStop = vi.fn()
     renderHotkeys({ emergencyHotkey: "Control+Shift+F12", onEmergencyStop })
-    act(() => vi.advanceTimersByTime(50))
+    await act(async () => { await vi.advanceTimersByTimeAsync(50) })
 
     expect(invokeMock).toHaveBeenCalledWith("set_hotkeys", {
       hotkeys: expect.arrayContaining([
@@ -167,7 +205,7 @@ describe("useGlobalHotkeys", () => {
     expect(invokeMock).not.toHaveBeenCalledWith("read_file", expect.anything())
   })
 
-  it("loads, applies, and starts the combo for a path profile", async () => {
+  it("starts a saved profile without replacing editor contents", async () => {
     const { applyCombo, startCombo, ref } = renderHotkeys()
     invokeMock.mockImplementation((cmd) =>
       cmd === "read_file" ? Promise.resolve(exportComboToString(COMBO_1)) : Promise.resolve(undefined),
@@ -176,7 +214,7 @@ describe("useGlobalHotkeys", () => {
     await act(async () => {
       await fireHotkey("p1")
     })
-    expect(applyCombo).toHaveBeenCalledWith(COMBO_1)
+    expect(applyCombo).not.toHaveBeenCalled()
     expect(ref.current).toBe("p1")
     expect(startCombo).toHaveBeenCalledWith(toRunnerInputs(COMBO_1))
   })
@@ -242,7 +280,8 @@ describe("useGlobalHotkeys", () => {
 
     await act(async () => { await fireHotkey("p1"); await fireHotkey("p1"); await fireHotkey("p1") })
 
-    expect(applyCombo.mock.calls.map(([value]) => value)).toEqual([COMBO_1, COMBO_2, COMBO_1])
+    expect(applyCombo).not.toHaveBeenCalled()
+    expect(startCombo.mock.calls.map(([value]) => value)).toEqual([COMBO_1, COMBO_2, COMBO_1].map(toRunnerInputs))
     expect(startCombo).toHaveBeenCalledTimes(3)
   })
 
@@ -254,11 +293,11 @@ describe("useGlobalHotkeys", () => {
         ? Promise.reject(new Error("missing"))
         : Promise.resolve(exportComboToString(COMBO_2))
     })
-    const { applyCombo } = renderHotkeys({ hotkeys: [profile] })
+    const { startCombo } = renderHotkeys({ hotkeys: [profile] })
     await act(async () => {})
     await act(async () => { await fireHotkey("p1") })
 
-    expect(applyCombo).toHaveBeenCalledWith(COMBO_2)
+    expect(startCombo).toHaveBeenCalledWith(toRunnerInputs(COMBO_2))
     expect(toastMock.warning).toHaveBeenCalledWith("Skipped 1 unavailable combo")
   })
 
@@ -283,7 +322,7 @@ describe("useGlobalHotkeys", () => {
     })
     expect(startCombo).toHaveBeenCalledTimes(1)
     expect(startCombo).toHaveBeenCalledWith(toRunnerInputs(COMBO_2))
-    expect(applyCombo).toHaveBeenCalledTimes(1)
+    expect(applyCombo).not.toHaveBeenCalled()
 
     // The stale press-1 load resolves later and must be discarded.
     await act(async () => {
@@ -291,7 +330,7 @@ describe("useGlobalHotkeys", () => {
       await press1
     })
     expect(startCombo).toHaveBeenCalledTimes(1)
-    expect(applyCombo).toHaveBeenCalledTimes(1)
+    expect(applyCombo).not.toHaveBeenCalled()
 
     await act(async () => {
       reads[0].resolve(exportComboToString(COMBO_1))
@@ -310,7 +349,7 @@ describe("useGlobalHotkeys", () => {
       await fireHotkey("p1")
     })
     expect(invokeMock).not.toHaveBeenCalledWith("read_file", expect.anything())
-    expect(applyCombo).toHaveBeenCalledWith(COMBO_1)
+    expect(applyCombo).not.toHaveBeenCalled()
     expect(startCombo).toHaveBeenCalledTimes(1)
   })
 
@@ -318,7 +357,7 @@ describe("useGlobalHotkeys", () => {
     invokeMock.mockImplementation((cmd) =>
       cmd === "read_file" ? Promise.resolve(exportComboToString(COMBO_1)) : Promise.resolve(undefined),
     )
-    const { result, applyCombo, ref } = renderHotkeys()
+    const { result, startCombo, ref } = renderHotkeys()
     await act(async () => {})
     await act(async () => {
       await fireHotkey("p1")
@@ -332,7 +371,7 @@ describe("useGlobalHotkeys", () => {
       await fireHotkey("p1")
     })
     expect(invokeMock).toHaveBeenCalledWith("read_file", { path: COMBO_PATH })
-    expect(applyCombo).toHaveBeenCalledTimes(2)
+    expect(startCombo).toHaveBeenCalledTimes(2)
   })
 
   it("a stale preload resolving after a save never poisons the cache", async () => {
@@ -360,7 +399,7 @@ describe("useGlobalHotkeys", () => {
       return Promise.resolve(undefined)
     })
 
-    const { result, applyCombo } = renderHotkeys()
+    const { result, startCombo } = renderHotkeys()
     await act(async () => {}) // let the preload start its read
 
     // A save lands while the preload read is in flight → cache invalidated.
@@ -375,8 +414,8 @@ describe("useGlobalHotkeys", () => {
     await act(async () => {
       await fireHotkey("p1")
     })
-    expect(applyCombo).toHaveBeenCalledWith(fresh)
-    expect(applyCombo).not.toHaveBeenCalledWith(stale)
+    expect(startCombo).toHaveBeenCalledWith(toRunnerInputs(fresh))
+    expect(startCombo).not.toHaveBeenCalledWith(toRunnerInputs(stale))
   })
 
   it("reports a load failure with the profile name", async () => {

@@ -3,6 +3,24 @@ import type { HotkeyBinding } from "./types"
 
 export const STORAGE_KEY = "combo-macro-settings"
 
+function normalizeBindings(values: unknown[]): HotkeyBinding[] {
+  const ids = new Set<string>()
+  return values.map((value) => {
+    const source = value && typeof value === "object" ? value as Record<string, unknown> : {}
+    let id = typeof source.id === "string" ? source.id.trim() : ""
+    if (!id || ids.has(id)) id = crypto.randomUUID()
+    ids.add(id)
+    return {
+      id,
+      name: typeof source.name === "string" ? source.name : "Untitled",
+      hotkey: typeof source.hotkey === "string" ? source.hotkey : "",
+      comboPath: typeof source.comboPath === "string" ? source.comboPath : "",
+      mode: ["toggle", "hold", "start", "stop", "cycle"].includes(String(source.mode)) ? source.mode as HotkeyBinding["mode"] : "toggle",
+      ...(source.comboPaths === undefined ? {} : { comboPaths: Array.isArray(source.comboPaths) ? [...new Set(source.comboPaths.filter((path): path is string => typeof path === "string" && path.length > 0))] : [] }),
+    }
+  })
+}
+
 export function loadHotkeys(): HotkeyBinding[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -11,7 +29,7 @@ export function loadHotkeys(): HotkeyBinding[] {
 
     if (parsed?.version === 3) {
       if (Array.isArray(parsed.hotkeys) && parsed.hotkeys.length > 0) {
-        return parsed.hotkeys.map((binding: HotkeyBinding) => ({ ...binding, mode: binding.mode ?? "toggle" }))
+        return normalizeBindings(parsed.hotkeys)
       }
       return [defaultHotkeyBinding()]
     }
@@ -22,7 +40,7 @@ export function loadHotkeys(): HotkeyBinding[] {
         {
           id: crypto.randomUUID(),
           name: "Untitled",
-          hotkey: parsed.hotkey ?? "F5",
+          hotkey: typeof parsed.hotkey === "string" ? parsed.hotkey : "F5",
           comboPath: "",
           mode: "toggle",
           comboPaths: [],
@@ -31,7 +49,7 @@ export function loadHotkeys(): HotkeyBinding[] {
     }
 
     // V1
-    return [{ ...defaultHotkeyBinding(), hotkey: parsed.hotkey ?? "F5" }]
+    return [{ ...defaultHotkeyBinding(), hotkey: typeof parsed?.hotkey === "string" ? parsed.hotkey : "F5" }]
   } catch {
     return [defaultHotkeyBinding()]
   }
@@ -54,7 +72,7 @@ export function loadRecentFiles(): string[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter((p) => typeof p === "string" && p.length > 0)
+    return [...new Set(parsed.filter((p): p is string => typeof p === "string" && p.length > 0))].slice(0, MAX_RECENT_FILES)
   } catch {
     return []
   }

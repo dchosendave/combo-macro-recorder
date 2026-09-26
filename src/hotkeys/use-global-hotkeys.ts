@@ -16,7 +16,6 @@ type UseGlobalHotkeysArgs = {
   startCurrentCombo: () => Promise<boolean> | void
   startCombo: (inputs: RunnerInputs) => Promise<boolean> | void
   stopAll: () => Promise<boolean> | void
-  applyCombo: (combo: CurrentCombo) => void
   runningProfileIdRef: MutableRefObject<string | null>
 }
 
@@ -39,7 +38,6 @@ export function useGlobalHotkeys({
   startCurrentCombo,
   startCombo,
   stopAll,
-  applyCombo,
   runningProfileIdRef,
 }: UseGlobalHotkeysArgs) {
   const [registrationStatus, setRegistrationStatus] = useState<HotkeyRegistrationStatus>("idle")
@@ -62,12 +60,11 @@ export function useGlobalHotkeys({
 
   const stopAllRef = useRef(stopAll)
   stopAllRef.current = stopAll
-
-  const applyComboRef = useRef(applyCombo)
-  applyComboRef.current = applyCombo
+  const registrationQueueRef = useRef<Promise<unknown>>(Promise.resolve())
 
   // Register the OS-level global shortcuts (debounced to avoid thrash).
   useEffect(() => {
+    let cancelled = false
     setRegistrationStatus("pending")
     setRegistrationError(null)
     const timer = setTimeout(() => {
@@ -83,16 +80,19 @@ export function useGlobalHotkeys({
           hotkeyId: "__emergency_stop__",
         })
       }
-      invoke("set_hotkeys", { hotkeys: mapped })
-        .then(() => setRegistrationStatus("ready"))
+      const registration = registrationQueueRef.current.then(() => invoke("set_hotkeys", { hotkeys: mapped }))
+      registrationQueueRef.current = registration.catch(() => {})
+      registration
+        .then(() => { if (!cancelled) setRegistrationStatus("ready") })
         .catch((error) => {
+          if (cancelled) return
           const message = String(error)
           setRegistrationStatus("error")
           setRegistrationError(message)
           toast.warning("Failed to register global hotkeys")
         })
     }, 50)
-    return () => clearTimeout(timer)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [hotkeys, emergencyHotkey])
 
   // Parsed-combo cache so switching is instant and deterministic (no per-press
@@ -110,17 +110,18 @@ export function useGlobalHotkeys({
   const cacheGenRef = useRef(0)
 
   // Reads a combo file into the cache. If a save (cache invalidation) landed
-  // while the first read was in flight, re-reads once so the cached snapshot is
+  // while a read was in flight, retries until stable so the cached snapshot is
   // never older than the last save.
   const readComboFresh = async (path: string): Promise<CurrentCombo> => {
-    const gen = cacheGenRef.current
-    let content = await invoke<string>("read_file", { path })
-    if (gen !== cacheGenRef.current) {
-      content = await invoke<string>("read_file", { path })
+    for (;;) {
+      const gen = cacheGenRef.current
+      const content = await invoke<string>("read_file", { path })
+      if (gen !== cacheGenRef.current) continue
+      const combo = importComboFromString(content)
+      comboCacheRef.current.set(path, combo)
+      setUnavailablePaths((current) => current.filter((item) => item !== path))
+      return combo
     }
-    const combo = importComboFromString(content)
-    comboCacheRef.current.set(path, combo)
-    return combo
   }
 
   // Preload every attached combo file once (and whenever the set of paths
@@ -172,6 +173,11 @@ export function useGlobalHotkeys({
   }, [cycleListsKey])
 
   useEffect(() => {
+    const cancelPending = () => {
+      seqRef.current += 1
+      runningProfileIdRef.current = null
+    }
+    window.addEventListener("macro-stop-requested", cancelPending)
     const unlisten = listen<{ hotkeyId: string; state: "pressed" | "released" }>("macro-hotkey", async (event) => {
       const { hotkeyId, state } = event.payload
       if (hotkeyId === "__emergency_stop__") {
@@ -187,20 +193,24 @@ export function useGlobalHotkeys({
 
       if (state === "released") {
         if (mode === "hold" && runningProfileIdRef.current === profile.id) {
-          await stopAllRef.current()
+          seqRef.current += 1
           runningProfileIdRef.current = null
+          await stopAllRef.current()
         }
         return
       }
 
       if (mode === "stop") {
         seqRef.current += 1
-        await stopAllRef.current()
         runningProfileIdRef.current = null
+        await stopAllRef.current()
         return
       }
 
       if ((mode === "start" || mode === "hold") && runningProfileIdRef.current === profile.id) return
+
+      const token = ++seqRef.current
+      if (mode === "hold" || mode === "start") runningProfileIdRef.current = profile.id
 
       if (mode === "cycle") {
         const paths = profile.comboPaths ?? []
@@ -208,7 +218,6 @@ export function useGlobalHotkeys({
           toast.warning(`${profile.name} has no combos to cycle`)
           return
         }
-        const token = ++seqRef.current
         const startIndex = cycleIndexRef.current.get(profile.id) ?? 0
         for (let offset = 0; offset < paths.length; offset += 1) {
           const index = (startIndex + offset) % paths.length
@@ -217,8 +226,8 @@ export function useGlobalHotkeys({
             let combo = comboCacheRef.current.get(path)
             if (!combo) combo = await readComboFresh(path)
             if (token !== seqRef.current) return
-            applyComboRef.current(combo)
             const started = await startComboRef.current(toRunnerInputs(combo))
+            if (token !== seqRef.current) return
             if (started === false) return
             cycleIndexRef.current.set(profile.id, (index + 1) % paths.length)
             runningProfileIdRef.current = profile.id
@@ -238,18 +247,17 @@ export function useGlobalHotkeys({
           toggleRunningRef.current()
         } else {
           const started = await startCurrentComboRef.current()
-          if (started !== false) runningProfileIdRef.current = profile.id
+          if (token === seqRef.current) runningProfileIdRef.current = started !== false ? profile.id : null
         }
         return
       }
 
       // Any combo-file press invalidates older in-flight loads.
-      const token = ++seqRef.current
 
       // Pressing the profile that's already running → stop.
       if (mode === "toggle" && runningProfileIdRef.current === profile.id) {
-        await stopAllRef.current()
         runningProfileIdRef.current = null
+        await stopAllRef.current()
         return
       }
 
@@ -262,16 +270,18 @@ export function useGlobalHotkeys({
         // A newer press superseded this one while we were loading.
         if (token !== seqRef.current) return
 
-        applyComboRef.current(combo) // reflect the loaded combo in the tabs
         const started = await startComboRef.current(toRunnerInputs(combo)) // atomic backend switch
-        if (started !== false) runningProfileIdRef.current = profile.id
+        if (token === seqRef.current) runningProfileIdRef.current = started !== false ? profile.id : null
       } catch {
         if (token === seqRef.current) {
+          runningProfileIdRef.current = null
           toast.error(`Failed to load ${profile.name}`)
         }
       }
     })
     return () => {
+      cancelPending()
+      window.removeEventListener("macro-stop-requested", cancelPending)
       unlisten.then((fn) => fn())
     }
   }, [])

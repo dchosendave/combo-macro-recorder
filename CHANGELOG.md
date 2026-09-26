@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Cancel pending Hold/recording starts, protect dirty documents across profile playback and native close, and serialize file operations.
+- Reconcile runner sessions, focus stops, injection failures, Reset, and compact window restoration.
+- Validate numeric inputs and overlapping channel keys, normalize preferences, roll back hotkey registration, and preserve numpad shortcuts.
+- Validate Jitbit rows and UTF-16 input, report skipped keys, and recognize uppercase JSON file extensions.
+
 - Combo-file settings saved while a hotkey preload read was still in flight could be reverted to the pre-save state on the next hotkey press (e.g. the "hold right mouse button" toggle coming back on after save/run/stop). A cache generation guard now re-reads instead of caching stale snapshots.
 
 ### Added
@@ -113,7 +118,8 @@ Core app. This section is reconstructed from commit history and is approximate.
 - Repeat counts match Jitbit/Razer Macro timing behavior.
 
 <!--
-Maintenance: add a new section for each release. Releases are created by
-bumping the version (scripts/bump-version.ps1) and pushing a `v*` tag; the CI
-workflow uploads the installer to a draft GitHub release.
+Maintenance: Release Please maintains release sections and version bumps.
+Merging its release PR creates the tag and draft release; the release workflow
+builds and uploads installers. See docs/development-workflow.md for the normal
+release path and emergency version-bump fallback.
 -->

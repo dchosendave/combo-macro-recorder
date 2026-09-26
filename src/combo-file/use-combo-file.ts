@@ -28,6 +28,17 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
   const [pendingRecovery, setPendingRecovery] = useState<PendingRecovery>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
+  const processingRef = useRef(false)
+  const beginOperation = useCallback(() => {
+    if (processingRef.current) return false
+    processingRef.current = true
+    setIsProcessing(true)
+    return true
+  }, [])
+  const endOperation = useCallback(() => {
+    processingRef.current = false
+    setIsProcessing(false)
+  }, [])
 
   const currentFilePathRef = useRef(currentFilePath)
   currentFilePathRef.current = currentFilePath
@@ -41,6 +52,7 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
   )
 
   const doNew = useCallback(() => {
+    if (processingRef.current) return
     const combo: CurrentCombo = { potions: defaultPotionConfig(), skills: defaultSkillConfig() }
     applyCombo(combo)
     setCurrentFilePath(null)
@@ -79,18 +91,16 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
   }, [applyCombo, onOpened, onOpenFailed])
 
   const openPath = useCallback(async (path: string): Promise<boolean> => {
-    if (isProcessing) return false
-    setIsProcessing(true)
+    if (!beginOperation()) return false
     try {
       return await openPathCore(path)
     } finally {
-      setIsProcessing(false)
+      endOperation()
     }
-  }, [isProcessing, openPathCore])
+  }, [beginOperation, endOperation, openPathCore])
 
   const openFile = useCallback(async () => {
-    if (isProcessing) return false
-    setIsProcessing(true)
+    if (!beginOperation()) return false
     try {
       const path = await open({
         filters: [{ name: "JSON", extensions: ["json"] }],
@@ -99,9 +109,9 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
       if (!path) return false
       return await openPathCore(path)
     } finally {
-      setIsProcessing(false)
+      endOperation()
     }
-  }, [isProcessing, openPathCore])
+  }, [beginOperation, endOperation, openPathCore])
 
   const saveToPath = useCallback(
     async (path: string) => {
@@ -117,6 +127,7 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
   )
 
   const saveFile = useCallback(async () => {
+    if (!beginOperation()) return
     try {
       const existing = currentFilePathRef.current
       if (existing) {
@@ -133,10 +144,13 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
       toast.success("Saved")
     } catch (e) {
       toast.error(`Save failed: ${e}`)
+    } finally {
+      endOperation()
     }
-  }, [saveToPath])
+  }, [saveToPath, beginOperation, endOperation])
 
   const saveFileAs = useCallback(async () => {
+    if (!beginOperation()) return
     try {
       const path = await save({
         defaultPath: "combo.json",
@@ -147,10 +161,13 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
       toast.success("Saved")
     } catch (e) {
       toast.error(`Save failed: ${e}`)
+    } finally {
+      endOperation()
     }
-  }, [saveToPath])
+  }, [saveToPath, beginOperation, endOperation])
 
   const requestOpen = useCallback(() => {
+    if (processingRef.current) return
     if (isDirty) {
       setPendingAction({ type: "open" })
       return
@@ -159,6 +176,7 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
   }, [isDirty, openFile])
 
   const requestNew = useCallback(() => {
+    if (processingRef.current) return
     if (isDirty) {
       setPendingAction({ type: "new" })
       return
@@ -203,7 +221,7 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
 
   const confirmRecovery = useCallback(async () => {
     const recovery = pendingRecovery
-    if (!recovery) return false
+    if (!recovery || !beginOperation()) return false
     try {
       await invoke("restore_backup_file", { path: recovery.path })
       applyCombo(recovery.combo)
@@ -213,17 +231,21 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
       localStorage.setItem(LAST_PATH_KEY, recovery.path)
       setPendingRecovery(null)
       onOpened?.(recovery.path)
+      onSave?.(recovery.path)
       toast.success("Recovered the previous saved version")
       return true
     } catch (e) {
       toast.error(`Recovery failed: ${e}`)
       return false
+    } finally {
+      endOperation()
     }
-  }, [pendingRecovery, applyCombo, onOpened])
+  }, [pendingRecovery, applyCombo, onOpened, onSave, beginOperation, endOperation])
 
   const cancelRecovery = useCallback(() => setPendingRecovery(null), [])
 
   const requestOpenPath = useCallback((path: string) => {
+    if (processingRef.current) return
     if (isDirty) {
       setPendingAction({ type: "open", path })
       return
@@ -235,6 +257,7 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
     const autoLoad = localStorage.getItem("combo-macro-auto-load") !== "false"
     const lastPath = localStorage.getItem(LAST_PATH_KEY)
     if (!autoLoad || !lastPath) return false
+    if (!beginOperation()) return false
 
     try {
       const content = await invoke<string>("read_file", { path: lastPath })
@@ -254,8 +277,10 @@ export function useComboFile({ getCombo, applyCombo, onSave, onOpened, onOpenFai
         localStorage.removeItem(LAST_PATH_KEY)
       }
       return false
+    } finally {
+      endOperation()
     }
-  }, [applyCombo])
+  }, [applyCombo, beginOperation, endOperation])
 
   return {
     currentFilePath, setCurrentFilePath,

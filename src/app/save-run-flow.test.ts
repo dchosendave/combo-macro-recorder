@@ -26,18 +26,17 @@ function comboWithHold(holdRightClick: boolean): CurrentCombo {
 }
 
 /** Wires the app's settings + combo-file + hotkey hooks together, with `onSave` invalidating the hotkey cache exactly as App.tsx does. */
-function useAppFlow() {
+function useAppFlow(profile = PROFILE) {
   const settings = useSettings()
   const runningProfileIdRef = { current: null as string | null }
   const { clearCachedCombo } = useGlobalHotkeys({
-    hotkeys: [PROFILE],
+    hotkeys: [profile],
     emergencyHotkey: "",
     onEmergencyStop: vi.fn(),
     toggleRunning: vi.fn(),
     startCurrentCombo: vi.fn(),
     startCombo: vi.fn(),
     stopAll: vi.fn(),
-    applyCombo: settings.applyCombo,
     runningProfileIdRef,
   })
   const comboFile = useComboFile({
@@ -95,4 +94,27 @@ describe("save → run → reload flow", () => {
     })
     expect(result.current.settings.holdRightClick).toBe(false)
   })
+})
+
+ it("keeps dirty file A and its save target while profile B executes", async () => {
+  const pathB = "C:\\combos\\b.json"
+  const profileB = { ...PROFILE, comboPath: pathB }
+  const files = new Map([[PATH, exportComboToString(comboWithHold(true))], [pathB, exportComboToString(comboWithHold(true))]])
+  invokeMock.mockImplementation(async (command, args) => {
+    const input = args as { path: string; content: string }
+    if (command === "read_file") return files.get(input.path)
+    if (command === "save_file") files.set(input.path, input.content)
+  })
+  localStorage.setItem(LAST_PATH_KEY, PATH)
+  const { result } = renderHook(() => useAppFlow(profileB))
+  await act(async () => { await result.current.comboFile.tryAutoLoad() })
+  act(() => result.current.settings.setHoldRightClick(false))
+  expect(result.current.comboFile.isDirty).toBe(true)
+  await act(async () => { await fireTauriEvent("macro-hotkey", { hotkeyId: "p1", state: "pressed" }) })
+  expect(result.current.settings.holdRightClick).toBe(false)
+  expect(result.current.comboFile.currentFilePath).toBe(PATH)
+  expect(result.current.comboFile.isDirty).toBe(true)
+  await act(async () => { await result.current.comboFile.saveFile() })
+  expect(JSON.parse(files.get(PATH)!).skills.holdRightClick).toBe(false)
+  expect(JSON.parse(files.get(pathB)!).skills.holdRightClick).toBe(true)
 })

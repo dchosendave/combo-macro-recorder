@@ -4,6 +4,9 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Startup and files
 
+- [ ] Open A, edit it, trigger profile B, then Save: verify A stays dirty and Save writes A while B remains unchanged.
+- [ ] Alt+F4 and taskbar Close respect unsaved changes, as does the custom close button.
+- [ ] Start Save/Open, then request New or another Open before completion; stale results must not change the current document.
 - [ ] Fresh storage shows the welcome dialog once.
 - [ ] Help can be reopened from the sidebar without changing the current combo.
 - [ ] New/Open/Save/Save As and recent files behave correctly.
@@ -28,6 +31,8 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Recording
 
+- [ ] Leave Skills during capture, return, and record again; no orphan capture remains.
+- [ ] Emergency stop during the backend start acknowledgement prevents recording from becoming active afterward.
 - [ ] 3/5/10/custom countdowns start at the configured duration.
 - [ ] Escape, Cancel, and emergency stop cancel countdown without starting backend capture.
 - [ ] Recording captures normal and rapid physical taps; follow [recorder-reliability.md](recorder-reliability.md).
@@ -36,6 +41,9 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Hotkeys and runner
 
+- [ ] Release Hold before file loading/start acknowledgement completes; the macro must remain stopped.
+- [ ] Switch profiles as focus auto-stop fires; an old monitor/event must not stop or hide the new run.
+- [ ] Expand a running macro and Reset; backend and frontend both become stopped.
 - [ ] Duplicate profile/emergency shortcuts are rejected.
 - [ ] Hotkey health reports registration success/failure, conflicts, missing cycle assignments, and unavailable combo files.
 - [ ] Toggle starts and stops.
@@ -49,6 +57,8 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Compact mode and visualization
 
+- [ ] Stop immediately after Start and run very short Repeat-N combos; late compact entry must not leave a stopped overlay.
+- [ ] Repeat enter/exit at 125%, 150%, and 200% scaling; the original physical window size must remain unchanged.
 - [ ] Confirm compact mode in every configured corner and `auto`.
 - [ ] Compact bar is always on top, square-cornered, and fully visible.
 - [ ] Expand Editor restores the window while playback continues.

@@ -16,7 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip"
-import { codeToLabel } from "@/shared/keycodes"
+import { codeToLabel, codeToShortcut } from "@/shared/keycodes"
 import { useComboFiles } from "@/combo-file/use-combo-files"
 import { toast } from "sonner"
 import type { HotkeyBinding, HotkeyMode } from "@/shared/types"
@@ -96,11 +96,11 @@ export function HotkeysTab({
       if (e.metaKey) parts.push("Meta")
       parts.push(e.code)
       const combo = parts.join("+")
-      if (emergencyHotkey && combo === emergencyHotkey) {
+      if (emergencyHotkey && codeToShortcut(combo).toLowerCase() === codeToShortcut(emergencyHotkey).toLowerCase()) {
         toast.error("Hotkey is reserved for emergency stop")
         return
       }
-      const dup = hotkeys.find((h) => h.id !== capturingId && h.hotkey === combo)
+      const dup = hotkeys.find((h) => h.id !== capturingId && codeToShortcut(h.hotkey).toLowerCase() === codeToShortcut(combo).toLowerCase())
       if (dup) {
         toast.error(`Hotkey already used by "${dup.name}"`)
         return

@@ -72,6 +72,7 @@ type SkillsTabProps = {
   setPlaybackSpeed: (value: string) => void
   repeatError: boolean
   keyError: boolean
+  delayError: boolean
   unmatchedKeydowns: string[]
   onUndo: () => void
   onRedo: () => void
@@ -109,6 +110,7 @@ export function SkillsTab({
   setPlaybackSpeed,
   repeatError,
   keyError,
+  delayError,
   unmatchedKeydowns,
   onUndo,
   onRedo,
@@ -362,6 +364,7 @@ export function SkillsTab({
         return
       }
       onSetSteps(result.steps)
+      if (result.skippedKeys.length) toast.warning(`Skipped unsupported keys: ${result.skippedKeys.join(", ")}`)
       toast.success(`Imported ${result.steps.length} steps from Jitbit file`)
     } catch (e) {
       toast.error(`Import failed: ${e}`)
@@ -661,6 +664,7 @@ export function SkillsTab({
               />
             )}
 
+            {delayError && <p role="alert" className="text-xs text-destructive">Delays must be whole milliseconds from 0 to one day after playback speed is applied.</p>}
             {keyError && (
               <Alert variant="destructive" className="py-2">
                 <AlertTriangle />

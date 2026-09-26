@@ -23,7 +23,7 @@ All commands are registered in `src-tauri/src/lib.rs`.
 | `set_hard_corners` | `{enabled}` | `()` | compact mode |
 | `list_processes` | none | `ProcessInfo[]` | Settings process picker |
 
-`RunnerStatus` is `{sessionId, potionsRunning, skillsRunning}`. Session zero means fully stopped. A successful start with at least one channel receives a monotonically increasing backend-issued session ID.
+`RunnerStatus` is `{sessionId, potionsRunning, skillsRunning}`. Explicit `stop_all` clears the session to zero. Repeat completion clears channel flags but currently retains the last session ID, so use the channel flags to determine whether anything is running. A start with at least one supplied channel receives a monotonically increasing backend-issued session ID.
 
 `RecordedEvent` is `{timestampMs, key, action}`, where action is `keydown` or `keyup` and timestamps are monotonic milliseconds from recording start.
 
@@ -31,14 +31,17 @@ All commands are registered in `src-tauri/src/lib.rs`.
 
 | Event | Direction | Payload | Semantics |
 | --- | --- | --- | --- |
-| `macro-hotkey` | Rust → UI | `{hotkeyId,state: "pressed"|"released"}` | One per registered shortcut transition |
-| `macro-activation` | Rust → UI | `{channel,cycle}` | Potion events every 10 cycles; skills every cycle |
+| `macro-hotkey` | Rust → UI | `{hotkeyId,state: "pressed"\|"released"}` | One per registered shortcut transition |
+| `macro-activation` | Rust → UI | `{sessionId,channel,cycle}` | Potion events every 10 cycles; skills capped near 60 Hz |
 | `macro-step` | Rust → UI | `{sessionId,stepIndex}` | Enabled skill-step index, capped near 60 Hz |
-| `macro-finished` | Rust → UI | `{channel,cycle,reason:"repeat-complete"}` | Repeat-N completion only |
-| `macro-auto-stopped` | Rust → UI | `{reason:"focus-lost"}` | Focus monitor stopped both channels |
+| `macro-finished` | Rust → UI | `{sessionId,channel,cycle,reason:"repeat-complete"\|"injection-failure",error?}` | Channel completion or worker failure |
+| `macro-auto-stopped` | Rust → UI | `{sessionId,reason:"focus-lost"}` | Focus monitor stopped both channels |
+| `macro-stop-requested` | UI DOM event | no payload | Immediately cancels pending profile loads and ownership on every stop intent |
 | `macro-emergency-stop` | UI DOM event | no payload | Cancels recording/countdown after emergency stop |
 
 The editor maps `macro-step.stepIndex` over enabled steps, not the original array. It displays progress only when the event session equals current `RunnerStatus.sessionId`. Progress is advisory and must never control injection.
+
+All runner events carry session IDs. Listeners are ready before startup; completion received before the start response remains authoritative. Delayed mount status cannot overwrite a newer command. Failed commands reconcile backend status without hiding an existing run.
 
 ## Runner input wire shapes
 
@@ -67,13 +70,17 @@ Disabled steps are removed before analysis and conversion. Playback speed scales
 
 ## Validation invariants
 
-- Potion minimum delay: 2 ms.
+- Potion delay: finite whole milliseconds, 2-86400000.
+- Skill delays: nonnegative whole milliseconds; effective delay after speed scaling cannot exceed 86400000.
+- Concurrent channels must not share Q/W/E/R keys; native validation rejects overlap.
 - Repeat count: 1–999999.
 - Playback speed: clamped to 0.1–4×.
 - Skills require at least one enabled KeyDown.
 - Empty/unsupported enabled key steps block running.
 - Enabled KeyDown without a later enabled KeyUp warns but does not block.
 - Live editor and file-loaded hotkey runs must both use the shared derivations.
+
+Shared conversion rejects malformed numeric inputs; Rust validates supported keys, counts, delay bounds, and channel overlap before replacing an existing run. Injector initialization failures reject startup; worker errors and panics clear the affected channel and emit `injection-failure`.
 
 ## localStorage
 
@@ -92,7 +99,7 @@ Disabled steps are removed before analysis and conversion. Playback speed scales
 | `combo-macro-skill-editor-view` | `list` or `timeline` |
 | `combo-macro-tutorial-seen` | `"1"` after dismissing the welcome dialog |
 
-Corrupt preference values must degrade to defaults rather than prevent startup.
+Hotkey preferences normalize field types, repair duplicate/missing IDs, filter cycle paths, and retain a fallback binding. Recent paths are filtered, deduplicated, and capped. New profiles start unbound; canonical duplicate shortcuts are rejected before native registration. Registration changes are serialized and roll back successful additions and removals on failure; rollback errors are surfaced.
 
 ## Coordinated-change checklist
 

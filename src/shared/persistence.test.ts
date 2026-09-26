@@ -20,6 +20,16 @@ function seed(raw: string) {
 }
 
 describe("loadHotkeys", () => {
+  it("repairs malformed fields and duplicate identities", () => {
+    seed(JSON.stringify({ version: 3, hotkeys: [
+      { id: "a", name: 42, hotkey: {}, comboPaths: 42, mode: "wrong" },
+      { id: "a", comboPath: 12, comboPaths: ["a.json", 42, "a.json"] }, null,
+    ] }))
+    const bindings = loadHotkeys()
+    expect(new Set(bindings.map((binding) => binding.id)).size).toBe(3)
+    expect(bindings[0]).toMatchObject({ name: "Untitled", hotkey: "", mode: "toggle", comboPaths: [] })
+    expect(bindings[1]).toMatchObject({ comboPath: "", comboPaths: ["a.json"] })
+  })
   beforeEach(() => {
     localStorage.clear()
   })
