@@ -9,28 +9,12 @@ const winStub = {
 }
 
 describe("computeFitSize", () => {
-  it("sizes a 1080p work area to 2/3 width at 16:9", () => {
-    expect(computeFitSize(1920, 1080)).toEqual({ width: 1280, height: 720 })
+  it("uses the compact default when it fits", () => {
+    expect(computeFitSize(1920, 1080)).toEqual({ width: 860, height: 620 })
   })
 
-  it("scales up proportionally on a 1440p work area", () => {
-    expect(computeFitSize(2560, 1440)).toEqual({ width: 1707, height: 960 })
-  })
-
-  it("caps the height on ultrawide work areas", () => {
-    expect(computeFitSize(3440, 1440)).toEqual({ width: 2176, height: 1224 })
-  })
-
-  it("floors to the smallest 16:9 rect on small work areas", () => {
-    expect(computeFitSize(1366, 728)).toEqual({ width: 1280, height: 720 })
-  })
-
-  it("floors to 1280x720 on a 125%-scaled 1080p work area", () => {
-    expect(computeFitSize(1536, 864)).toEqual({ width: 1280, height: 720 })
-  })
-
-  it("clamps the width to the work area when 16:9 cannot fit", () => {
-    expect(computeFitSize(1024, 768)).toEqual({ width: 1024, height: 720 })
+  it("clamps to a smaller work area", () => {
+    expect(computeFitSize(800, 600)).toEqual({ width: 800, height: 600 })
   })
 })
 
@@ -43,11 +27,11 @@ describe("useWindowFit", () => {
     } as never)
   })
 
-  it("sizes the window to 2/3 of the work-area width at 16:9 on launch", async () => {
+  it("uses the compact size on launch", async () => {
     renderHook(() => useWindowFit())
     await act(async () => {})
 
-    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(1280, 720))
+    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(860, 620))
   })
 
   it("converts physical work-area pixels by the monitor scale factor", async () => {
@@ -58,10 +42,10 @@ describe("useWindowFit", () => {
     renderHook(() => useWindowFit())
     await act(async () => {})
 
-    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(1280, 720))
+    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(860, 620))
   })
 
-  it("scales up proportionally on larger screens", async () => {
+  it("does not enlarge on larger screens", async () => {
     vi.mocked(currentMonitor).mockResolvedValue({
       scaleFactor: 1,
       workArea: { position: { x: 0, y: 0 }, size: { width: 2560, height: 1440 } },
@@ -69,7 +53,7 @@ describe("useWindowFit", () => {
     renderHook(() => useWindowFit())
     await act(async () => {})
 
-    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(1707, 960))
+    expect(winStub.setSize).toHaveBeenCalledWith(new LogicalSize(860, 620))
   })
 
   it("does not resize when no monitor is available", async () => {

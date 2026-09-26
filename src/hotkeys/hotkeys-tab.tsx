@@ -3,7 +3,6 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { AlertCircle, ArrowUp, ArrowDown, CheckCircle2, FileJson, LoaderCircle, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { Kbd } from "@/shared/components/ui/kbd"
-import { Card, CardContent } from "@/shared/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -134,9 +133,8 @@ export function HotkeysTab({
   }
 
   return (
-    <Card size="sm" className="h-full">
-      <CardContent className="flex flex-1 flex-col gap-3 min-h-0 overflow-y-auto">
-        <Alert className={registrationStatus === "error" || issueCount > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-emerald-500/30 bg-emerald-500/5"}>
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden p-2 text-[13px] [&_button]:text-[13px] [&_input]:text-[13px] [&_label]:text-[13px]">
+        <Alert className={`shrink-0 py-2 ${registrationStatus === "error" || issueCount > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-emerald-500/30 bg-emerald-500/5"}`}>
           {registrationStatus === "pending" ? <LoaderCircle className="animate-spin" /> : registrationStatus === "error" || issueCount > 0 ? <AlertCircle /> : <CheckCircle2 />}
           <AlertTitle>
             {registrationStatus === "pending"
@@ -155,14 +153,14 @@ export function HotkeysTab({
                 : "Configured shortcuts are registered with Windows."}
           </AlertDescription>
         </Alert>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
           {hotkeys.map((binding) => {
             const issue = profileIssue(binding)
             return (
             <div
               key={binding.id}
               onClick={() => setSelectedId(binding.id)}
-              className={`flex flex-col gap-1.5 rounded-xl border px-2.5 py-1.5 transition-all cursor-pointer ${
+              className={`flex flex-col gap-1 rounded-lg border px-2 py-1 transition-all cursor-pointer ${
                 selectedId === binding.id
                   ? "border-primary bg-primary/10 ring-1 ring-primary"
                   : "hover:bg-muted/50"
@@ -294,7 +292,7 @@ export function HotkeysTab({
               </div>
 
               {/* Row 2: File path + Browse / Dropdown */}
-              {(binding.mode ?? "toggle") === "cycle" ? (
+              {selectedId === binding.id && ((binding.mode ?? "toggle") === "cycle" ? (
                 <div className="flex flex-col gap-1.5 pl-0.5" onClick={(event) => event.stopPropagation()}>
                   {(binding.comboPaths ?? []).map((path, index, paths) => (
                     <div key={path} className="flex items-center gap-1 rounded-md bg-muted/50 px-1.5 py-1">
@@ -403,7 +401,7 @@ export function HotkeysTab({
               </div>
               ) : (
                 <p className="pl-0.5 text-xs text-muted-foreground">Stops whichever macro is active.</p>
-              )}
+              ))}
             </div>
             )
           })}
@@ -424,7 +422,6 @@ export function HotkeysTab({
             Pick a combo file, then press the hotkey in-game to start.
           </p>
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }

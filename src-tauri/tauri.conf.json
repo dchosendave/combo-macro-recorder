@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "Hamin Macro Recorder",
-        "width": 1280,
-        "height": 720,
-        "minWidth": 660,
-        "minHeight": 720,
+        "width": 860,
+        "height": 620,
+        "minWidth": 700,
+        "minHeight": 560,
         "resizable": true,
         "decorations": false,
         "dragDropEnabled": false

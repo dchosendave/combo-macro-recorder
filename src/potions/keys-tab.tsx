@@ -2,7 +2,6 @@ import { Switch } from "@/shared/components/ui/switch"
 import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
 import { Kbd } from "@/shared/components/ui/kbd"
-import { Card, CardContent } from "@/shared/components/ui/card"
 import { Separator } from "@/shared/components/ui/separator"
 import { RepeatModeControl } from "@/shared/components/repeat-mode-control"
 import { MIN_DELAY } from "@/shared/defaults"
@@ -44,8 +43,7 @@ export function KeysTab({
   repeatError,
 }: KeysTabProps) {
   return (
-    <Card size="sm" className="h-full">
-      <CardContent className="flex flex-1 flex-col gap-4 min-h-0 overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2 text-[13px] [&_button]:text-[13px] [&_input]:text-[13px] [&_label]:text-[13px]">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="enable-qwer" className="font-normal">
             Enable QWER keys for auto potions
@@ -58,7 +56,7 @@ export function KeysTab({
         </div>
 
         {autoPotions ? (
-          <div className="grid grid-cols-2 gap-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          <div className="grid grid-cols-4 gap-1.5 animate-in fade-in-0 slide-in-from-top-2 duration-200">
             {POTION_KEYS.map((key) => (
               <div
                 key={key}
@@ -71,7 +69,7 @@ export function KeysTab({
                     togglePotionKey(key)
                   }
                 }}
-                className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2 transition-colors cursor-pointer hover:bg-muted/50"
+                className="flex items-center justify-between gap-2 rounded-lg border px-2 py-1 transition-colors cursor-pointer hover:bg-muted/50"
               >
                 <span className="flex items-center gap-2 text-sm">
                   <Kbd>{key.toUpperCase()}</Kbd>
@@ -92,7 +90,7 @@ export function KeysTab({
 
         <Separator />
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-4">
             <Label htmlFor="enable-custom-delay" className="font-normal">
               Enable custom hold duration for the auto potions
@@ -114,7 +112,7 @@ export function KeysTab({
               onChange={(e) =>
                 setDelayMs(e.target.value.replace(/[^0-9]/g, ""))
               }
-              className="w-28"
+              className="h-8 w-24"
             />
             <span className="text-sm text-muted-foreground">ms</span>
           </div>
@@ -138,7 +136,6 @@ export function KeysTab({
           setRepeatCount={setRepeatCount}
           repeatError={repeatError}
         />
-      </CardContent>
-    </Card>
+    </div>
   )
 }

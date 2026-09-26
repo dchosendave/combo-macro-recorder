@@ -7,8 +7,6 @@ import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
 import { Button } from "@/shared/components/ui/button"
 import { Slider } from "@/shared/components/ui/slider"
-import { Card, CardContent } from "@/shared/components/ui/card"
-import { Separator } from "@/shared/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select"
 import { RepeatModeControl } from "@/shared/components/repeat-mode-control"
 import {
@@ -46,6 +44,7 @@ import { adjustSelectedDelays, copySelectedSteps, duplicateSelectedSteps, pasteS
 import { SkillTimeline } from "@/skills/skill-timeline"
 import { StepSelectionInspector } from "@/skills/step-selection-inspector"
 import { normalizePlaybackSpeed } from "@/shared/run-validation"
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover"
 
 type SkillsTabProps = {
   enabled: boolean
@@ -383,37 +382,26 @@ export function SkillsTab({
   }
 
   return (
-    <Card size="sm" className="h-full min-w-0 w-full" onKeyDown={handleGlobalKeyDown} tabIndex={0}>
-      <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="enable-skills" className="font-normal">
-            Enable skills channel
-          </Label>
-          <Switch
-            id="enable-skills"
-            checked={enabled}
-            onCheckedChange={setEnabled}
-          />
+    <div className="flex h-full min-w-0 w-full flex-col overflow-hidden p-2" onKeyDown={handleGlobalKeyDown} tabIndex={0}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden text-[13px] [&_button]:text-[13px] [&_input]:text-[13px] [&_label]:text-[13px]">
+        <div className="flex shrink-0 items-center gap-5">
+          <label className="flex items-center gap-2 text-sm" htmlFor="enable-skills">
+            Skills <Switch id="enable-skills" checked={enabled} onCheckedChange={setEnabled} />
+          </label>
+          {enabled && (
+            <label className="flex items-center gap-2 text-sm" htmlFor="hold-right-click">
+              Hold right-click <Switch id="hold-right-click" checked={holdRightClick} onCheckedChange={setHoldRightClick} />
+            </label>
+          )}
         </div>
 
         {enabled ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 animate-in fade-in-0 slide-in-from-top-2 duration-200">
-            <div className="flex items-center justify-between gap-4">
-              <Label htmlFor="hold-right-click" className="font-normal">
-                Hold right mouse button
-              </Label>
-              <Switch
-                id="hold-right-click"
-                checked={holdRightClick}
-                onCheckedChange={setHoldRightClick}
-              />
-            </div>
-
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden animate-in fade-in-0 slide-in-from-top-2 duration-200">
             {/* Row 1: Labels, actions, and lock */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Labels:</span>
               <Select value={labelStyle} onValueChange={(v) => setLabelStyle(v as StepLabelStyle)}>
-                <SelectTrigger className="h-7 w-[120px] text-xs">
+                <SelectTrigger className="h-7 w-[96px] text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -428,12 +416,26 @@ export function SkillsTab({
                 setEditorView(view)
                 localStorage.setItem("combo-macro-skill-editor-view", view)
               }}>
-                <SelectTrigger className="h-7 w-[105px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-7 w-[92px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="list">List view</SelectItem>
                   <SelectItem value="timeline">Timeline</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Popover>
+                <PopoverTrigger render={<Button size="sm" variant="outline" className="h-7 text-xs">Playback · {repeatMode === "loop" ? "Loop" : `${repeatCount || 0}×`} · {effectivePlaybackSpeed.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}×</Button>} />
+                <PopoverContent align="start" className="w-80 gap-3 rounded-xl p-3">
+                  <div className="flex items-center justify-between"><Label className="font-normal">Playback speed</Label><div className="flex items-center gap-2"><Button type="button" variant="ghost" size="xs" disabled={runnerActive || effectivePlaybackSpeed === 1} onClick={() => setPlaybackSpeed("1")}>Reset</Button><span className="text-xs font-medium tabular-nums">{effectivePlaybackSpeed.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}×</span></div></div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">0.1×</span>
+                    <Slider className="min-w-32 flex-1" min={0.1} max={4} step={0.05} value={[effectivePlaybackSpeed]} disabled={runnerActive} aria-label="Playback speed" onValueChange={(value) => setPlaybackSpeed(String(typeof value === "number" ? value : value[0]))} />
+                    <span className="text-xs text-muted-foreground">4×</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{authoredDurationMs.toLocaleString()} ms authored</span><span>{effectiveDurationMs.toLocaleString()} ms effective</span></div>
+                  <RepeatModeControl repeatMode={repeatMode} setRepeatMode={setRepeatMode} repeatCount={repeatCount} setRepeatCount={setRepeatCount} repeatError={repeatError} />
+                </PopoverContent>
+              </Popover>
 
               <div className="flex-1" />
 
@@ -675,15 +677,15 @@ export function SkillsTab({
             {editorView === "list" ? (
             <div
               ref={scrollRef}
-              className="flex-1 min-h-0 overflow-y-auto scroll-smooth"
+              className="flex-1 min-h-0 overflow-y-auto scroll-smooth rounded-lg border p-1"
               onKeyDown={handleStepListKeyDown}
               tabIndex={0}
             >
               {steps.length > 0 ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-0.5">
                   {steps.map((step, i) => (
                     <div key={step.id} className="flex gap-2">
-                      <div className="flex shrink-0 flex-col items-center pt-3">
+                      <div className="flex shrink-0 flex-col items-center pt-2">
                         <div
                           className={`w-px flex-1 rounded-full transition-colors ${
                             i === 0 ? "bg-transparent" : "bg-border"
@@ -727,8 +729,8 @@ export function SkillsTab({
                         onDragOver={(e) => handleRowDragOver(e, step.id)}
                         onDrop={(e) => handleRowDrop(e, step.id)}
                         onDragEnd={clearDrag}
-                        className={`flex flex-1 items-center gap-1.5 rounded-xl border px-3 py-2 transition-colors animate-in fade-in-0 slide-in-from-left-2 duration-200 ${locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"} ${step.disabled ? "opacity-40" : ""} ${activeRunStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""} ${
-                          draggingId === step.id ? "opacity-50" : ""
+                        className={`flex min-h-8 flex-1 items-center gap-1 rounded-md border px-2 py-0.5 transition-colors animate-in fade-in-0 slide-in-from-left-2 duration-200 ${locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"} ${step.disabled ? "opacity-40" : ""} ${activeRunStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""} ${
+                          draggingId === step.id ? "scale-[0.99] opacity-60 shadow-md" : ""
                         } ${
                           dragOverId === step.id
                             ? dropPosition === "above"
@@ -743,7 +745,7 @@ export function SkillsTab({
                       >
                         {!locked && (
                           <span
-                            className="flex shrink-0 items-center text-muted-foreground"
+                            className="pointer-events-none flex shrink-0 items-center text-muted-foreground"
                             aria-label="Drag to reorder"
                             title="Drag anywhere on the row to reorder"
                           >
@@ -751,7 +753,7 @@ export function SkillsTab({
                           </span>
                         )}
 
-                        <span className="w-8 shrink-0 text-center text-xs font-medium text-muted-foreground">
+                        <span className="w-8 shrink-0 text-center text-[13px] font-medium text-muted-foreground">
                           {labelText(step.type)}
                         </span>
 
@@ -767,7 +769,7 @@ export function SkillsTab({
                                   ms: e.target.value.replace(/[^0-9]/g, ""),
                                 })
                               }
-                              className="h-7 w-20 text-xs"
+                              className="h-7 w-20 text-[13px]"
                             />
                             <span className="text-xs text-muted-foreground">ms</span>
                           </>
@@ -891,51 +893,13 @@ export function SkillsTab({
               />
             )}
 
-            <Separator />
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex w-full items-center justify-between gap-3">
-                <Label className="font-normal">Playback speed</Label>
-                <span className="min-w-12 text-right text-sm font-medium tabular-nums">
-                  {effectivePlaybackSpeed.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}×
-                </span>
-              </div>
-              <span className="text-xs text-muted-foreground">0.1×</span>
-              <Slider
-                className="min-w-32 flex-1"
-                min={0.1}
-                max={4}
-                step={0.05}
-                value={[effectivePlaybackSpeed]}
-                disabled={runnerActive}
-                aria-label="Playback speed"
-                onValueChange={(value) => setPlaybackSpeed(String(typeof value === "number" ? value : value[0]))}
-              />
-              <span className="text-xs text-muted-foreground">4×</span>
-              <Button type="button" variant="ghost" size="xs" disabled={runnerActive || effectivePlaybackSpeed === 1} onClick={() => setPlaybackSpeed("1")}>Reset 1×</Button>
-              <span className="basis-full text-xs text-muted-foreground">
-                {runnerActive
-                  ? "Stop playback to change speed. The current run keeps the speed it started with."
-                  : `${authoredDurationMs.toLocaleString()} ms authored · ${effectiveDurationMs.toLocaleString()} ms effective per cycle`}
-              </span>
-            </div>
-
-            <Separator />
-
-            <RepeatModeControl
-              repeatMode={repeatMode}
-              setRepeatMode={setRepeatMode}
-              repeatCount={repeatCount}
-              setRepeatCount={setRepeatCount}
-              repeatError={repeatError}
-            />
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
             Turn on to configure skill keys.
           </p>
         )}
-      </CardContent>
+      </div>
 
       <AlertDialog open={showClearConfirm}>
         <AlertDialogContent size="sm">
@@ -977,6 +941,6 @@ export function SkillsTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   )
 }

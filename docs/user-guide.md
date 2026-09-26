@@ -4,13 +4,13 @@ Hamin Macro Recorder builds and runs potion and skill-key sequences. Real global
 
 ## Start a combo
 
-On first launch, open an existing JSON combo, create an untitled combo, or skip the welcome screen. The Help item at the bottom of the sidebar reopens a non-destructive feature guide at any time.
+On first launch, open an existing JSON combo, create an untitled combo, or skip the welcome screen. The Help button at the right of the navigation bar reopens a non-destructive feature guide at any time.
 
-The header contains New, Open, Save, Save As, recent files, and Run/Stop. An **Unsaved** badge means the editor differs from the last opened or saved version. After a confirmed save, the header shows its time on wider windows.
+The header keeps Run/Stop visible and groups New, Open, Save, Save As, and recent files under **File**. An **Unsaved** badge means the editor differs from the last opened or saved version.
 
 ## Potions
 
-In **Combo → Potions**:
+In **Potions**:
 
 1. Enable the potion channel.
 2. Select any of Q, W, E, and R.
@@ -19,7 +19,7 @@ In **Combo → Potions**:
 
 ## Skills
 
-In **Combo → Skills**, unlock the editor before changing steps. A combo can contain:
+In **Skills**, unlock the editor before changing steps. A combo can contain:
 
 - KeyDown — press and hold a key.
 - KeyUp — release a key.
@@ -52,7 +52,7 @@ Disabled steps stay in the file and editor but are skipped during validation, du
 
 ### Playback speed
 
-Drag the playback-speed slider left to slow down or right to speed up, from 0.1× to 4× in 0.05× increments. The live readout and authored/effective cycle durations update as you drag; Reset returns to 1×. Playback scales copies of delay values sent to the runner and never rewrites saved step delays. Speed is locked during a run because that run keeps the value it started with.
+Open **Playback** in the Skills toolbar to change speed, repeat mode, or repeat count. Drag the speed slider from 0.1× to 4× in 0.05× increments. The live readout and authored/effective cycle durations update as you drag; Reset returns to 1×. Playback scales copies of delay values sent to the runner and never rewrites saved step delays. Speed is locked during a run because that run keeps the value it started with.
 
 ### Recording
 
@@ -76,7 +76,7 @@ Each named profile has a shortcut, run mode, and combo-file assignment:
 - **Stop only** — stops the current macro.
 - **Cycle** — advances through an ordered list of combo files and wraps.
 
-Cycle mode skips unavailable files and warns. Shortcut editing checks profile and emergency-stop conflicts. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness. New profiles start without a shortcut. Numpad shortcuts remain distinct from top-row digits.
+Cycle mode skips unavailable files and warns. Click a profile row to expand its combo assignment; other profiles remain summarized. Shortcut editing checks profile and emergency-stop conflicts. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness. New profiles start without a shortcut. Numpad shortcuts remain distinct from top-row digits.
 
 ## Running and stopping
 
@@ -105,6 +105,8 @@ Settings contains:
 - Emergency-stop shortcut.
 - Auto-stop game process.
 - Combo directory used by file pickers.
+
+Settings are grouped into flat **Window & files**, **Automation**, and **Safety** sections separated by dividers. The game-process picker is searchable and shows the recognizable application or window title above its executable name.
 
 ## Troubleshooting
 
