@@ -2,7 +2,6 @@ import { act, fireEvent, render, screen } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ThemeProvider } from "next-themes"
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
-import { SidebarProvider } from "@/shared/components/ui/sidebar"
 import { AppHeader } from "@/app/app-header"
 import type { ComboFileEntry } from "@/combo-file/use-combo-files"
 
@@ -10,8 +9,7 @@ function renderHeader(comboFiles: ComboFileEntry[], onSelect: (p: string) => voi
   return render(
     <ThemeProvider attribute="class">
       <TooltipProvider>
-        <SidebarProvider>
-          <AppHeader
+        <AppHeader
             running={false}
             elapsed={0}
             fileName="C:\\combos\\a.json"
@@ -31,8 +29,7 @@ function renderHeader(comboFiles: ComboFileEntry[], onSelect: (p: string) => voi
             comboFiles={comboFiles}
             onRequestComboFiles={vi.fn()}
             onSelectComboFile={onSelect}
-          />
-        </SidebarProvider>
+        />
       </TooltipProvider>
     </ThemeProvider>,
   )
@@ -83,8 +80,7 @@ describe("combo file dropdown", () => {
       rerender(
         <ThemeProvider attribute="class">
           <TooltipProvider>
-            <SidebarProvider>
-              <AppHeader
+            <AppHeader
                 running={false}
                 elapsed={0}
                 fileName="C:\\combos\\a.json"
@@ -107,8 +103,7 @@ describe("combo file dropdown", () => {
                 ]}
                 onRequestComboFiles={vi.fn()}
                 onSelectComboFile={vi.fn()}
-              />
-            </SidebarProvider>
+            />
           </TooltipProvider>
         </ThemeProvider>,
       )

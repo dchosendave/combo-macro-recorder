@@ -34,7 +34,7 @@ describe("useCompactMode", () => {
     const { result } = renderHook(() => useCompactMode())
     await act(async () => { await result.current.enterCompact() })
     expect(result.current.compactMode).toBe(false)
-    expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 660, minHeight: 720 })
+    expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 700, minHeight: 560 })
     expect(winStub.setResizable).toHaveBeenLastCalledWith(true)
   })
   beforeEach(() => {
@@ -84,7 +84,7 @@ describe("useCompactMode", () => {
     const current = { width: 1200, height: 800 }
     expect(winStub.setSize).toHaveBeenLastCalledWith(new PhysicalSize(current.width, current.height))
     expect(winStub.setResizable).toHaveBeenLastCalledWith(true)
-    expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 660, minHeight: 720 })
+    expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 700, minHeight: 560 })
     expect(winStub.setAlwaysOnTop).toHaveBeenCalledWith(false)
   })
 

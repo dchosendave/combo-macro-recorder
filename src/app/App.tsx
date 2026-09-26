@@ -2,9 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { toast } from "sonner"
 import { useCloseGuard } from "@/app/use-close-guard"
-import { SidebarInset, SidebarProvider } from "@/shared/components/ui/sidebar"
 import { AppHeader } from "@/app/app-header"
-import { AppSidebar } from "@/app/app-sidebar"
+import { AppNavigation } from "@/app/app-sidebar"
 import { TitleBar } from "@/app/title-bar"
 import { HelpDialog } from "@/app/help-dialog"
 import { KeysTab } from "@/potions/keys-tab"
@@ -246,10 +245,32 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden" onKeyDown={handleKeyDown}>
+    <div className="flex h-full flex-col overflow-hidden" onKeyDown={handleKeyDown}>
       <TitleBar onRequestClose={handleRequestClose} />
-      <SidebarProvider className="flex-1 min-h-0">
-        <AppSidebar
+      <AppHeader
+        running={anyRunning}
+        elapsed={elapsed}
+        fileName={currentFilePath}
+        isDirty={isDirty}
+        isProcessing={isProcessing}
+        lastSavedAt={lastSavedAt}
+        canRun={settings.canRun}
+        compactMode={compactMode}
+        lastStopReason={lastStopReason}
+        onToggleRunning={toggleRunning}
+        onReset={handleReset}
+        onOpen={requestOpen}
+        onNew={requestNew}
+        onSave={saveFile}
+        onSaveAs={saveFileAs}
+        recentFiles={recentFiles}
+        onOpenRecent={handleOpenRecent}
+        onClearRecent={clearRecent}
+        comboFiles={comboFiles}
+        onRequestComboFiles={refreshComboFiles}
+        onSelectComboFile={requestOpenPath}
+      />
+      <AppNavigation
           activeTab={activeTab}
           innerTab={innerTab}
           onSelectTab={setActiveTab}
@@ -259,32 +280,7 @@ function App() {
           }}
           onOpenHelp={() => setShowHelp(true)}
         />
-        <SidebarInset className="min-h-0 min-w-0 overflow-hidden gap-4 p-4">
-        <AppHeader
-          running={anyRunning}
-          elapsed={elapsed}
-          fileName={currentFilePath}
-          isDirty={isDirty}
-          isProcessing={isProcessing}
-          lastSavedAt={lastSavedAt}
-          canRun={settings.canRun}
-          compactMode={compactMode}
-          lastStopReason={lastStopReason}
-          onToggleRunning={toggleRunning}
-          onReset={handleReset}
-          onOpen={requestOpen}
-          onNew={requestNew}
-          onSave={saveFile}
-          onSaveAs={saveFileAs}
-          recentFiles={recentFiles}
-          onOpenRecent={handleOpenRecent}
-          onClearRecent={clearRecent}
-          comboFiles={comboFiles}
-          onRequestComboFiles={refreshComboFiles}
-          onSelectComboFile={requestOpenPath}
-        />
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden animate-in fade-in-0 duration-200">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-2.5 animate-in fade-in-0 duration-200">
           <Suspense fallback={<div role="status">Loading...</div>}>
           {activeTab === "combo" ? (
             innerTab === "potions" ? (
@@ -370,9 +366,7 @@ function App() {
             />
           )}
           </Suspense>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </main>
 
     <StartupDialog
       open={showStartup}

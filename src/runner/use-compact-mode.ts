@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import type { CompactCorner } from "@/shared/types"
 
 const COMPACT = new LogicalSize(500, 38)
-const MIN_CONSTRAINTS = { minWidth: 660, minHeight: 720 }
+const MIN_CONSTRAINTS = { minWidth: 700, minHeight: 560 }
 const CORNER_KEY = "combo-macro-compact-corner"
 const MARGIN = 0
 

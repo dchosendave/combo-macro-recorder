@@ -8,18 +8,21 @@ Use this checklist before a release or after changes to Windows integration, lay
 - [ ] Alt+F4 and taskbar Close respect unsaved changes, as does the custom close button.
 - [ ] Start Save/Open, then request New or another Open before completion; stale results must not change the current document.
 - [ ] Fresh storage shows the welcome dialog once.
-- [ ] Help can be reopened from the sidebar without changing the current combo.
+- [ ] Help can be reopened from the navigation bar without changing the current combo.
 - [ ] New/Open/Save/Save As and recent files behave correctly.
 - [ ] Unsaved changes prompt before destructive open/new/close actions.
-- [ ] Editing shows the Unsaved badge and emphasized Save action; a successful save clears both and shows a last-save time on a wide window.
+- [ ] Editing shows the Unsaved badge; a successful save clears it and re-enables Save only after another edit.
 - [ ] Second save creates a readable `.bak` containing the previous version.
 - [ ] A damaged primary plus valid backup offers recovery; Cancel is non-destructive and Recover restores the primary.
 - [ ] Auto-load succeeds for a valid last path and degrades safely for a missing/corrupt path.
 
 ## Potions and skills editor
 
-- [ ] Minimum 660×720 window remains usable; resizing does not clip card borders or timeline ends.
-- [ ] List and Timeline show the same step order; Timeline remains read-only whether the List editor is locked or unlocked.
+- [ ] Minimum 700×560 window remains usable; resizing does not clip controls, card borders, or timeline ends.
+- [ ] The app shell never document-scrolls into blank space; only the macro list and intentionally overflowing tab content scroll.
+- [ ] Flat tab layouts have no clipped dividers or unintended nested borders at minimum and default window sizes.
+- [ ] Actions, inputs, menus, and dialogs use consistent soft rectangles; status badges, switches, and key chips remain pill-shaped.
+- [ ] List and Timeline show the same step order and selection; Timeline remains read-only whether the List editor is locked or unlocked.
 - [ ] Ctrl/Shift selection, Ctrl+A, Delete, Ctrl+D, block drag, and bulk delay operations work.
 - [ ] Dragging from the row body reorders one or multiple selected steps; inputs, key pickers, and action buttons do not accidentally start a drag.
 - [ ] Copy/cut/paste preserves order and assigns independent steps.
@@ -27,7 +30,7 @@ Use this checklist before a release or after changes to Windows integration, lay
 - [ ] Disabling a matching KeyUp shows the unmatched-KeyDown warning.
 - [ ] Timeline reaches and fully displays its last step when horizontally scrolled.
 - [ ] Timeline start/active/end, zoom, Fit, and Follow controls work; Follow off does not pull the viewport during playback.
-- [ ] Dragging the playback-speed slider changes its readout and effective duration without rewriting source delays; Reset returns to 1× and controls lock during a run.
+- [ ] The Playback popover changes speed/repeat settings without resizing the editor; Reset returns to 1× and speed controls lock during a run.
 
 ## Recording
 
@@ -41,6 +44,9 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Hotkeys and runner
 
+- [ ] Only the selected hotkey profile expands its combo assignment; selecting another profile collapses the previous one.
+- [ ] Every unlocked skill row drags from its non-interactive surface; inputs and action buttons edit or activate without starting a drag.
+- [ ] The game-process picker is wide enough to distinguish friendly names and executable names at the minimum window size.
 - [ ] Release Hold before file loading/start acknowledgement completes; the macro must remain stopped.
 - [ ] Switch profiles as focus auto-stop fires; an old monitor/event must not stop or hide the new run.
 - [ ] Expand a running macro and Reset; backend and frontend both become stopped.
