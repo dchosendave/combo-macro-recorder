@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { toast } from "sonner"
 import { useCloseGuard } from "@/app/use-close-guard"
@@ -7,6 +7,9 @@ import { AppNavigation } from "@/app/app-sidebar"
 import { TitleBar } from "@/app/title-bar"
 import { HelpDialog } from "@/app/help-dialog"
 import { KeysTab } from "@/potions/keys-tab"
+import { SkillsTab } from "@/skills/skills-tab"
+import { HotkeysTab } from "@/hotkeys/hotkeys-tab"
+import { SettingsTab } from "@/settings/settings-tab"
 import { CompactOverlay } from "@/runner/compact-overlay"
 import { StartupDialog } from "@/combo-file/startup-dialog"
 import { ConfirmDiscardDialog } from "@/combo-file/confirm-discard-dialog"
@@ -34,10 +37,6 @@ import { useGlobalHotkeys } from "@/hotkeys/use-global-hotkeys"
 import { codeToLabel } from "@/shared/keycodes"
 import type { AutoStopConfig } from "@/shared/types"
 import "./App.css"
-
-const SkillsTab = lazy(() => import("@/skills/skills-tab").then((module) => ({ default: module.SkillsTab })))
-const HotkeysTab = lazy(() => import("@/hotkeys/hotkeys-tab").then((module) => ({ default: module.HotkeysTab })))
-const SettingsTab = lazy(() => import("@/settings/settings-tab").then((module) => ({ default: module.SettingsTab })))
 
 const AUTO_STOP_KEY = "combo-macro-auto-stop"
 const EMERGENCY_HOTKEY_KEY = "combo-macro-emergency-hotkey"
@@ -281,7 +280,6 @@ function App() {
           onOpenHelp={() => setShowHelp(true)}
         />
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-2.5 animate-in fade-in-0 duration-200">
-          <Suspense fallback={<div role="status">Loading...</div>}>
           {activeTab === "combo" ? (
             innerTab === "potions" ? (
               <KeysTab
@@ -365,7 +363,6 @@ function App() {
               profileHotkeys={settings.hotkeys}
             />
           )}
-          </Suspense>
       </main>
 
     <StartupDialog
