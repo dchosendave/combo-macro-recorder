@@ -120,6 +120,7 @@ export function useSkillSettings(initial: SkillConfig) {
     skillsRepeatCount, setSkillsRepeatCount,
     playbackSpeed, setPlaybackSpeed,
     skillsRepeatError, skillsKeyError, unmatchedKeydowns, skillsCanRun,
+    skillsDelayError: derivation.delayError,
     apply,
     persisted,
     skillsConfig,

@@ -33,6 +33,33 @@ flowchart LR
 
 All Tauri commands are registered in `src-tauri/src/lib.rs`.
 
+## Desktop UI shell
+
+The normal editor window defaults to `860×620` logical pixels with a `700×560`
+minimum. `useWindowFit` applies that compact size at startup while clamping it to
+the current monitor work area. `html`, `body`, and `#root` are height-locked so the
+document itself cannot scroll into blank space; individual editors and settings
+areas own any required overflow.
+
+The shell uses three fixed horizontal layers above the active tab: the custom
+title bar, the file/run toolbar, and one static navigation row for Potions,
+Skills, Hotkeys, and Settings. There is no collapsible sidebar. Tab content is
+flat rather than wrapped in page-level cards; borders are reserved for editable
+or selectable regions such as the skill-step list and hotkey profiles.
+
+Skills gives its remaining height to the step list. List view uses 28 px grid
+rows with a sticky Type/Value/Actions header and inline editors; selection,
+dragging, validation, and playback state are expressed as row highlights.
+Layout and step-label choices share a View popover. Playback speed and repeat
+settings live in a separate toolbar popover, and only the step list scrolls. Hotkey
+profiles are always-visible labeled forms for shortcut, run mode, and combo assignment. Settings uses two columns separated
+by dividers, followed by a full-width Safety section; its process picker displays
+friendly/window names above executable names.
+
+Shape semantics are applied centrally in `App.css` through component `data-slot`
+attributes: actions and inputs use 6 px corners, menus/popovers 10 px, and dialogs
+12 px. Pills are reserved for status, switches, and keyboard chips.
+
 ## Flow diagrams
 
 ### Hotkey press pipeline
@@ -58,7 +85,7 @@ sequenceDiagram
     else switch to another profile
         FE->>FE: ++seq token (last press wins)
         FE->>FE: comboCacheRef lookup (preloaded) or read_file + parse
-        FE->>FE: token check → applyCombo (reflect in tabs)
+        FE->>FE: token check, derive execution inputs (editor unchanged)
         FE->>CMD: start_combo(potions, skills)
         CMD->>RUN: switch_lock → stop both channels → spawn enabled
         RUN->>OS: enigo key press/release per loop
@@ -83,9 +110,9 @@ sequenceDiagram
     RUN->>RUN: bump monitor_gen; spawn focus monitor (if autoStop active)
     loop each cycle
         RUN->>OS: SendInput press → sleep_precise(delay) → release
-        RUN-->>FE: macro-activation {channel, cycle}
+        RUN-->>FE: macro-activation {sessionId, channel, cycle}
         opt repeat mode = count and count reached
-            RUN-->>FE: macro-finished {channel, cycle, reason: repeat-complete}
+            RUN-->>FE: macro-finished {sessionId, channel, cycle, reason: repeat-complete}
             RUN->>RUN: running = false, release keys, thread exits
         end
     end
@@ -95,7 +122,7 @@ sequenceDiagram
             MON->>MON: reset grace timer
         alt game not focused for > 750ms grace
             MON->>RUN: stop_all_inner (both channels)
-            MON-->>FE: macro-auto-stopped {reason: "focus-lost"}
+            MON-->>FE: macro-auto-stopped {sessionId, reason: "focus-lost"}
             MON->>MON: thread exits
         end
     end
@@ -112,9 +139,9 @@ skills of combo B).
 Hotkey combo cache (`useGlobalHotkeys`): parsed combos are cached per path
 (preloaded at mount / when the profile path set changes) so presses are instant.
 `clearCachedCombo` (wired to the file-save flow) deletes the entry and bumps a
-cache generation counter; any read still in flight re-reads before caching, so a
-pre-save snapshot can never be served after a save (e.g. "hold right click"
-reverting to its old value).
+cache generation counter; in-flight reads retry until the generation is stable.
+Recovery also invalidates the cache. Saved profiles execute without changing the
+editor document, its dirty baseline, or its save path.
 
 ## Tauri commands
 
@@ -131,7 +158,7 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 | `restore_backup_file` | `path` | `()` | Atomically restore the recovery copy without rotating the damaged primary |
 | `read_jitbit_file` | `path` | `string` | Read `.mcr` text (UTF-8, UTF-16 BOM fallback) |
 | `list_combo_files` | `path` (dir) | `{name, path}[]` | List `.json` files in a directory, case-insensitive sorted (used by the Hotkeys tab file picker) |
-| `set_hotkeys` | `hotkeys: {shortcut, hotkeyId}[]` | `()` | Diff-register global shortcuts; unregisters removed ones. Transactional: a registration failure re-registers the removed keys (best-effort rollback) and returns Err without mutating state |
+| `set_hotkeys` | `hotkeys: {shortcut, hotkeyId}[]` | `()` | Validate canonical duplicates, diff-register shortcuts, and roll back additions/removals on failure; report rollback errors |
 | `start_recording` | — | `()` | Start the key-polling thread |
 | `stop_recording` | — | `{timestampMs, key, action}[]` | Stop polling, return recorded events |
 | `set_hard_corners` | `enabled: bool` | `()` | Toggle Windows 11 DWM corner rounding on the calling window (`true` = square). No-op off-Windows; used by compact mode |
@@ -145,12 +172,12 @@ Args/returns are JSON-serialized camelCase (serde `rename_all = "camelCase"`).
 | Event | Direction | Payload | Frequency |
 |---|---|---|---|
 | `macro-hotkey` | Rust → frontend | `{hotkeyId, state: "pressed"\|"released"}` | once per global-hotkey transition |
-| `macro-activation` | Rust → frontend | `{channel: "potions"\|"skills", cycle, keys?}` | potions: every **10** cycles (throttled); skills: every cycle |
+| `macro-activation` | Rust → frontend | `{sessionId, channel: "potions"\|"skills", cycle, keys?}` | potions: every **10** cycles (throttled); skills: capped near 60 Hz |
 | `macro-step` | Rust → frontend | `{sessionId, stepIndex}` | skills progress, capped near 60 Hz |
-| `macro-finished` | Rust → frontend | `{channel, cycle, reason: "repeat-complete"}` | once, when Repeat-N count is reached |
-| `macro-auto-stopped` | Rust → frontend | `{reason: "focus-lost"}` | once, when the focus monitor stops a run |
+| `macro-finished` | Rust → frontend | `{sessionId, channel, cycle, reason: "repeat-complete"\|"injection-failure", error?}` | channel completion or worker failure |
+| `macro-auto-stopped` | Rust → frontend | `{sessionId, reason: "focus-lost"}` | once, when the focus monitor stops a run |
 
-`macro-finished` does **not** fire for manual stops (only Repeat-N completion); the
+`macro-finished` does **not** fire for manual stops; the
 frontend resets running state on `stop_all` itself. `macro-auto-stopped` fires only
 for the focus monitor's stop; the frontend mirrors both channels down, runs the same
 teardown as a manual stop (exit compact, clear profile ref), and toasts the reason.
@@ -238,9 +265,11 @@ file-loaded path (`toRunnerInputs` in `src/runner/runner-inputs.ts`, a thin
 facade over the same functions) call it, so a file-loaded combo behaves
 identically to one edited in the tabs.
 
-Rules: potions run if `enabled && any key &&` no delay error (`customDelay && delayMs < MIN_DELAY`
-= 2 ms) `&&` no repeat error; skills run if `enabled && ≥1 keydown step &&` no repeat error.
-Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
+Rules: enabled channels require supported keys and finite whole-number delays/counts.
+Potion delays are 2-86400000 ms; effective skill delays are 0-86400000 ms.
+Skills require an enabled KeyDown. Disabled steps are omitted. Rust validates
+the command before switching and rejects overlapping channel keys. See
+[`contracts.md`](contracts.md) for the authoritative bounds.
 
 **Never re-implement these rules elsewhere — import the derivations.**
 
@@ -256,7 +285,7 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
 - **Potions loop** (`potions.rs`): per cycle, press each enabled key in `q → w → e → r`
   order, wait `delayMs`, release. Emits `macro-activation` every 10 cycles (throttle).
 - **Skills loop** (`skills.rs`): optionally holds right-click for the whole run, then
-  executes the step list (`delay`/`keydown`/`keyup`). Emits `macro-activation` every cycle.
+  executes the step list (`delay`/`keydown`/`keyup`). Emits `macro-activation` at no more than about 60 Hz.
 - Repeat-N mode emits `macro-finished` with `reason: "repeat-complete"` and stops the channel when the count is reached.
 - Skills emit session-tagged `macro-step` progress at no more than about 60 Hz. The editor ignores other sessions and highlights the corresponding enabled source step.
 - **Focus monitor** (`focus.rs`): when `autoStop` is active, `start_combo_inner` spawns a
@@ -264,9 +293,10 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
   PID against the configured game process name (`CreateToolhelp32Snapshot`). Once the game
   has been seen focused at least once, a foreground loss persisting past the 750 ms grace
   period stops both channels (`stop_all_inner`) and emits `macro-auto-stopped`
-  `{reason: "focus-lost"}`. The monitor is self-terminating — it exits when the channels
-  stop — and captures `monitor_gen` (bumped by every `start_combo`) so a stale monitor can
-  never stop a newer combo. The provider is abstracted behind `ForegroundProvider` (like
+  `{sessionId, reason: "focus-lost"}`. The monitor is self-terminating — it exits when the channels
+  stop — and captures `monitor_gen` (bumped by every `start_combo`). The generation is
+  checked again under the switch lock before stopping, so a stale monitor cannot stop a newer combo.
+  A sample with no foreground window resets the grace timer. The provider is abstracted behind `ForegroundProvider` (like
   `InjectorFactory`), so tests script the foreground with a mock. Windows-only; no-op
   fallback elsewhere.
 - **Process enumeration** (`processes.rs`) is shared by the monitor's game matching and
@@ -284,7 +314,7 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
   tokens (`Space`, `Enter`, `F1`–`F24`, `Num0`–`Num9`, `PageUp`, arrows, … —
   the vocabulary emitted by the recorder's `vk_to_readable`) map to real VK
   keys so recorded special keys replay as themselves. Unknown tokens are
-  skipped. Jitbit import (`src/skills/parsers.ts`) accepts the same tokens.
+  rejected at the command boundary. Jitbit import (`src/skills/parsers.ts`) accepts the same tokens.
 - Key release: both loops press/release through a `KeyReleaseGuard`
   (`injector.rs`) whose `Drop` releases the right-click and every step key on
   normal return, Repeat-N completion, cancellation, **or panic** (unwinding
@@ -322,7 +352,7 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
   typing, or any unknown command reject the **entire file** with the
   offending line number + text — a mixed macro can never be partially
   imported. Unsupported key tokens on `Keyboard` rows (e.g. modifiers) are
-  skipped as usual.
+  reported in an import warning.
 - **Tolerated exception**: a single `Mouse : … : RightButtonDown : …` row is
   stripped when it is the very first or very last non-blank row (Jitbit
   records the game-focus click / attack hold there). In the middle, or more
@@ -337,7 +367,7 @@ Invalid delays fall back to `MIN_DELAY`; repeat counts clamp to `[1, 999999]`.
 - While a combo runs, the window resizes to 500×38 logical px outer size (~30px
   client area; min-size constraints cleared) and parks in the chosen screen corner.
 - `auto` corner = the corner matching the window center relative to the work-area center.
-- On exit the previous size, position, and min-size constraints are restored.
+- Transitions are serialized. Exit and partial-entry failure restore the previous physical size, position, topmost state, and min-size constraints, including at mixed DPI.
 - Entering compact mode calls `set_hard_corners(true)` (square corners for the
   bar — Win11 DWM rounds undecorated windows by default); exiting restores the
   system default rounding. Both are fire-and-forget: cosmetic only.
@@ -388,3 +418,7 @@ Contracts the suite pins (keep them green when refactoring):
   Common-Controls v6 manifest (`comctl32!TaskDialogIndirect` only exists in the
   WinSxS v6 copy). `src-tauri/build.rs` embeds it into every artifact; the app
   binary gets the same manifest from tauri-build. See tauri-apps/tauri#13419.
+
+## Lifecycle safeguards
+
+Recording commands are serialized across hook mounts; unmount and emergency cancellation stop pending or active capture. File operations use a synchronous busy guard so New/Open/Save/recovery cannot interleave. Native close requests protect dirty documents and wait for file operations. Reset awaits the shared runner stop before clearing settings. Stored always-on-top is applied at startup. Runner events are session-filtered, completion before acknowledgement is retained, and counters reset for each session. Injector errors and worker panics clear channel flags and report failures while key-release guards still run.

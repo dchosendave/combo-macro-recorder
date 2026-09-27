@@ -3,7 +3,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { open } from "@tauri-apps/plugin-dialog"
 import { FolderOpen, RefreshCw, ShieldAlert, X } from "lucide-react"
 import { toast } from "sonner"
-import { Card, CardContent } from "@/shared/components/ui/card"
 import { Label } from "@/shared/components/ui/label"
 import { Switch } from "@/shared/components/ui/switch"
 import { Button } from "@/shared/components/ui/button"
@@ -31,7 +30,7 @@ import {
 } from "@/shared/components/ui/select"
 import { useComboFiles } from "@/combo-file/use-combo-files"
 import { useRunningProcesses } from "@/settings/use-running-processes"
-import { codeToLabel } from "@/shared/keycodes"
+import { codeToLabel, codeToShortcut } from "@/shared/keycodes"
 import type { AutoStopConfig, CompactCorner, HotkeyBinding } from "@/shared/types"
 import { RECORD_COUNTDOWN_KEY } from "@/recorder/use-recorder"
 
@@ -88,7 +87,7 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
       if (event.metaKey) parts.push("Meta")
       parts.push(event.code)
       const shortcut = parts.join("+")
-      const duplicate = profileHotkeys.find((profile) => profile.hotkey === shortcut)
+      const duplicate = profileHotkeys.find((profile) => codeToShortcut(profile.hotkey).toLowerCase() === codeToShortcut(shortcut).toLowerCase())
       if (duplicate) {
         toast.error(`Hotkey already used by "${duplicate.name}"`)
         return
@@ -114,9 +113,13 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
   }, [processQuery, processes])
 
   const toggleAlwaysOnTop = async (v: boolean) => {
-    setAlwaysOnTop(v)
-    localStorage.setItem("combo-macro-always-on-top", String(v))
-    await getCurrentWindow().setAlwaysOnTop(v)
+    try {
+      await getCurrentWindow().setAlwaysOnTop(v)
+      setAlwaysOnTop(v)
+      localStorage.setItem("combo-macro-always-on-top", String(v))
+    } catch (error) {
+      toast.error(`Always on top failed: ${error}`)
+    }
   }
 
   const toggleAutoLoad = (v: boolean) => {
@@ -134,9 +137,9 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
   }
 
   return (
-    <Card size="sm" className="h-full">
-      <CardContent className="flex flex-1 flex-col gap-3 min-h-0 overflow-y-auto">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Window</Label>
+    <div className="grid h-full min-h-0 min-w-0 grid-cols-2 content-start overflow-x-hidden overflow-y-auto p-2 text-[13px] [&_label]:text-[13px]">
+        <section className="flex min-w-0 flex-col gap-2 pr-4">
+        <h2 className="text-[13px] font-semibold">Window &amp; files</h2>
 
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="always-on-top" className="font-normal">
@@ -160,12 +163,12 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
           />
         </div>
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
           <Label className="font-normal">
             Combo files directory
           </Label>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
               {comboDir || "Not set"}
             </span>
             <Tooltip>
@@ -221,7 +224,10 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
           </Select>
         </div>
 
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-1">Auto-stop</Label>
+        </section>
+
+        <section className="flex min-w-0 flex-col gap-2 border-l pl-4">
+        <h2 className="text-[13px] font-semibold">Automation</h2>
 
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="auto-stop" className="font-normal">
@@ -234,10 +240,11 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
           />
         </div>
 
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="game-process" className="font-normal">
-            Game process name
-          </Label>
+        <div className="flex flex-col gap-1.5">
+          <div>
+            <Label htmlFor="game-process" className="font-normal">Game process</Label>
+            <p className="text-[11px] leading-4 text-muted-foreground">Choose the game that should keep focus during playback.</p>
+          </div>
           <Combobox
             value={autoStop.gameProcess}
             filteredItems={filteredProcesses}
@@ -258,9 +265,9 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
               id="game-process"
               placeholder="Pick a process…"
               showClear
-              className="w-[190px] text-xs"
+              className="w-full text-[13px]"
             />
-            <ComboboxContent>
+            <ComboboxContent className="w-[360px] max-w-[calc(100vw-32px)] rounded-xl">
               <ComboboxList>
                 {loading || processes.length === 0 ? (
                   <ComboboxEmpty>{loading ? "Loading processes…" : "No processes found"}</ComboboxEmpty>
@@ -269,10 +276,10 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
                     {processes.map((p) => {
                       const primary = p.friendly ?? p.title ?? p.name
                       return (
-                        <ComboboxItem key={p.pid} value={p.name}>
-                          <span className="truncate">{primary}</span>
+                        <ComboboxItem key={p.pid} value={p.name} className="flex-col items-start gap-0.5 rounded-lg py-2 text-[13px]">
+                          <span className="w-full truncate">{primary}</span>
                           {primary !== p.name && (
-                            <span className="ml-auto max-w-[40%] truncate text-xs font-normal text-muted-foreground">
+                            <span className="w-full truncate text-[11px] font-normal text-muted-foreground">
                               {p.name}
                             </span>
                           )}
@@ -286,16 +293,11 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
             </ComboboxContent>
           </Combobox>
         </div>
-        <p className="text-xs text-muted-foreground -mt-2">
-          Stops the macro shortly after you switch away from the game window.
-          The game's executable name is matched case-insensitively.
-        </p>
-
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-1">Recording</Label>
+        <h3 className="mt-1 border-t pt-2 text-[13px] font-semibold">Recording</h3>
         <div className="flex items-center justify-between gap-4">
           <div>
             <Label className="font-normal">Recording countdown</Label>
-            <p className="text-xs text-muted-foreground">Time to switch to the target window.</p>
+            <p className="text-[11px] leading-4 text-muted-foreground">Time to switch to the target window.</p>
           </div>
           <div className="flex items-center gap-2">
             <Select value={countdownPreset} onValueChange={(value) => {
@@ -328,13 +330,16 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
           </div>
         </div>
 
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-1">Safety</Label>
+        </section>
+
+        <section className="col-span-2 mt-4 flex flex-col gap-2 border-t pt-4">
+        <h2 className="text-[13px] font-semibold">Safety</h2>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <ShieldAlert className="size-4 text-muted-foreground" />
             <div>
               <Label className="font-normal">Emergency stop</Label>
-              <p className="text-xs text-muted-foreground">Stops macros and active recording.</p>
+              <p className="text-[11px] leading-4 text-muted-foreground">Stops macros and active recording.</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -352,7 +357,7 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+        </section>
+    </div>
   )
 }

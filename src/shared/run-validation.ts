@@ -1,4 +1,4 @@
-import { MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/defaults"
+import { MAX_DELAY, MAX_REPEAT, MIN_DELAY, MIN_REPEAT } from "@/shared/defaults"
 import type { PotionConfig, PotionKey, RepeatMode, SkillConfig } from "@/shared/types"
 import { analyzeSkillSteps, normalizeSkillKey } from "@/shared/skill-keys"
 
@@ -39,6 +39,7 @@ export type PotionRunDerivation = {
 
 export type SkillRunDerivation = {
   canRun: boolean
+  delayError: boolean
   repeatError: boolean
   keyError: boolean
   unmatchedKeydowns: string[]
@@ -57,17 +58,18 @@ export function normalizePlaybackSpeed(value: string | undefined): number {
  * `MIN_DELAY`; repeat counts clamp to `[MIN_REPEAT, MAX_REPEAT]`.
  */
 export function derivePotionRun(p: PotionConfig): PotionRunDerivation {
-  const delayError = p.customDelay && p.delayMs !== "" && Number(p.delayMs) < MIN_DELAY
+  const delay = p.customDelay && p.delayMs.trim() !== "" ? Number(p.delayMs) : MIN_DELAY
+  const delayError = !Number.isSafeInteger(delay) || delay < MIN_DELAY || delay > MAX_DELAY
   const repeatError =
     p.repeatMode === "count" &&
-    (p.repeatCount === "" || Number(p.repeatCount) < MIN_REPEAT)
+    (!Number.isSafeInteger(Number(p.repeatCount)) || Number(p.repeatCount) < MIN_REPEAT)
   const anyPotionKeyEnabled = Object.values(p.keys).some(Boolean)
 
   const config: PotionsRunConfig = {
     keys: p.keys,
-    delayMs: !delayError && p.delayMs !== "" ? Number(p.delayMs) : MIN_DELAY,
+    delayMs: delayError ? MIN_DELAY : delay,
     repeatMode: p.repeatMode,
-    repeatCount: Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(p.repeatCount) || MIN_REPEAT)),
+    repeatCount: repeatError || !Number.isSafeInteger(Number(p.repeatCount)) ? MIN_REPEAT : Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(p.repeatCount))),
   }
 
   return {
@@ -86,25 +88,28 @@ export function derivePotionRun(p: PotionConfig): PotionRunDerivation {
 export function deriveSkillRun(s: SkillConfig): SkillRunDerivation {
   const repeatError =
     s.repeatMode === "count" &&
-    (s.repeatCount === "" || Number(s.repeatCount) < MIN_REPEAT)
+    (!Number.isSafeInteger(Number(s.repeatCount)) || Number(s.repeatCount) < MIN_REPEAT)
   const enabledSteps = s.steps.filter((step) => !step.disabled)
   const playbackSpeed = normalizePlaybackSpeed(s.playbackSpeed)
   const analysis = analyzeSkillSteps(enabledSteps)
   const keyError = analysis.invalidStepIds.length > 0
+  const delayError = enabledSteps.some((step) => step.type === "delay" &&
+    (!Number.isSafeInteger(Number(step.ms)) || Number(step.ms) < 0 || Math.round(Number(step.ms) / playbackSpeed) > MAX_DELAY))
 
   const config: SkillsRunConfig = {
     holdRightClick: s.holdRightClick,
     steps: enabledSteps.map((step) =>
       step.type === "delay"
-        ? { type: "delay" as const, ms: Math.round(Math.max(0, Number(step.ms) || 0) / playbackSpeed) }
+        ? { type: "delay" as const, ms: Number.isSafeInteger(Number(step.ms)) ? Math.min(MAX_DELAY, Math.round(Math.max(0, Number(step.ms)) / playbackSpeed)) : 0 }
         : { type: step.type, key: normalizeSkillKey(step.key) ?? step.key.trim() },
     ),
     repeatMode: s.repeatMode,
-    repeatCount: Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(s.repeatCount) || MIN_REPEAT)),
+    repeatCount: repeatError || !Number.isSafeInteger(Number(s.repeatCount)) ? MIN_REPEAT : Math.min(MAX_REPEAT, Math.max(MIN_REPEAT, Number(s.repeatCount))),
   }
 
   return {
-    canRun: s.enabled && enabledSteps.some((step) => step.type === "keydown") && !repeatError && !keyError,
+    canRun: s.enabled && enabledSteps.some((step) => step.type === "keydown") && !repeatError && !keyError && !delayError,
+    delayError,
     repeatError,
     keyError,
     unmatchedKeydowns: analysis.unmatchedKeydowns,

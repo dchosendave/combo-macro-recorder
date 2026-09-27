@@ -4,22 +4,22 @@ Hamin Macro Recorder builds and runs potion and skill-key sequences. Real global
 
 ## Start a combo
 
-On first launch, open an existing JSON combo, create an untitled combo, or skip the welcome screen. The Help item at the bottom of the sidebar reopens a non-destructive feature guide at any time.
+On first launch, open an existing JSON combo, create an untitled combo, or skip the welcome screen. The Help button at the right of the navigation bar reopens a non-destructive feature guide at any time.
 
-The header contains New, Open, Save, Save As, recent files, and Run/Stop. An **Unsaved** badge means the editor differs from the last opened or saved version. After a confirmed save, the header shows its time on wider windows.
+The header keeps Run/Stop visible and groups New, Open, Save, Save As, and recent files under **File**. An **Unsaved** badge means the editor differs from the last opened or saved version.
 
 ## Potions
 
-In **Combo → Potions**:
+In **Potions**:
 
 1. Enable the potion channel.
 2. Select any of Q, W, E, and R.
-3. Optionally set a custom hold duration. The minimum is 2 ms.
+3. Optionally set a custom hold duration. Use whole milliseconds from 2 to 86400000.
 4. Choose Loop or Repeat N.
 
 ## Skills
 
-In **Combo → Skills**, unlock the editor before changing steps. A combo can contain:
+In **Skills**, unlock the editor before changing steps. A combo can contain:
 
 - KeyDown — press and hold a key.
 - KeyUp — release a key.
@@ -28,6 +28,8 @@ In **Combo → Skills**, unlock the editor before changing steps. A combo can co
 The picker exposes letters, numbers, common keys, and F1–F12. Imported and previously saved punctuation, numpad keys, and F13–F24 remain supported internally.
 
 Unsupported or empty keys block Run. A KeyDown without a later matching KeyUp shows a warning but remains runnable because intentional holds are valid.
+
+The Skills editor is always available. **Run skills** only includes or excludes the configured channel from playback; turning it off never hides or deletes its steps.
 
 ### List and Timeline views
 
@@ -44,6 +46,8 @@ List view is the step editor. Timeline view is a read-only visualization of cumu
 
 While the editor is unlocked, drag anywhere on a row's non-interactive surface to reorder it. Inputs, key pickers, and action buttons remain reserved for editing. Dragging one row in a multi-selection moves the selected rows together.
 
+List view uses a dense command grid with fixed Type, Value, and Actions columns. The header stays visible while the rows scroll; key and delay values remain editable inline. The compact **View** menu switches between List and Timeline and chooses text or icon step labels.
+
 The compact selection bar opens an inspector where you can duplicate, copy, cut, paste, delete, enable/disable, or adjust selected delays. Pasted and duplicated steps receive new identities.
 
 Timeline controls jump to the start, active step, or end; zoom in/out; or fit the whole cycle. **Follow** keeps the active playback step visible. Turn Follow off while inspecting another part of a running timeline. The green playhead marks the currently executing enabled step.
@@ -52,7 +56,7 @@ Disabled steps stay in the file and editor but are skipped during validation, du
 
 ### Playback speed
 
-Drag the playback-speed slider left to slow down or right to speed up, from 0.1× to 4× in 0.05× increments. The live readout and authored/effective cycle durations update as you drag; Reset returns to 1×. Playback scales copies of delay values sent to the runner and never rewrites saved step delays. Speed is locked during a run because that run keeps the value it started with.
+Open **Playback** in the Skills toolbar to change speed, repeat mode, or repeat count. Drag the speed slider from 0.1× to 4× in 0.05× increments. The live readout and authored/effective cycle durations update as you drag; Reset returns to 1×. Playback scales copies of delay values sent to the runner and never rewrites saved step delays. Speed is locked during a run because that run keeps the value it started with.
 
 ### Recording
 
@@ -62,7 +66,7 @@ Stopping recording converts timestamp differences into Delay steps. Modifier key
 
 ## Save and recovery
 
-Save writes JSON atomically: the app syncs a sibling temporary file and replaces the primary file. Once a file already exists, its previous good contents are retained as `<file>.bak`.
+Save writes JSON atomically: the app syncs a sibling temporary file and replaces the primary file. Once a file already exists, its previous contents are retained as `<file>.bak`. Save does not validate those previous contents; the backup is not guaranteed to be valid if the primary was already damaged.
 
 If opening the primary file fails and the backup is valid, the app offers recovery. Confirming recovery replaces the damaged primary while retaining a usable backup. Cancel leaves files unchanged.
 
@@ -76,7 +80,7 @@ Each named profile has a shortcut, run mode, and combo-file assignment:
 - **Stop only** — stops the current macro.
 - **Cycle** — advances through an ordered list of combo files and wraps.
 
-Cycle mode skips unavailable files and warns. A shortcut cannot conflict with another profile or the emergency-stop shortcut. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness.
+Cycle mode skips unavailable files and warns. Hotkeys appear in one flat, divided list rather than separate cards; rows are numbered `Hotkey 1`, `Hotkey 2`, and so on, and show readiness, shortcut, run mode, and combo assignment without requiring selection. Shortcut editing checks profile and emergency-stop conflicts. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness. New profiles start without a shortcut. Numpad shortcuts remain distinct from top-row digits.
 
 ## Running and stopping
 
@@ -84,9 +88,15 @@ Run validates the enabled channels and waits for backend confirmation. The windo
 
 Stop from the compact bar, the configured hotkey mode, the main header, or the optional emergency-stop shortcut. Emergency stop is intentionally unset until configured in Settings.
 
-After stopping, the header identifies the last outcome: manual, emergency, Repeat complete, focus lost, profile switched, or start failed.
+After stopping, the header identifies the last outcome: manual, emergency, Repeat complete, focus lost, profile switched, start failed, or injection failed.
 
-Auto-stop can watch a selected game process. After that game has been focused once, losing focus for the grace period stops both channels.
+Auto-stop can watch a selected game process. After that game has been focused once, another foreground process remaining focused for the grace period stops both channels. A sample with no foreground window currently resets the grace timer.
+
+Saved profiles run independently of the editor: triggering B while editing A leaves A's edits and save target intact. Playback highlighting applies only to runs started from the current editor. Hold release cancels pending startup as well as active playback. Leaving Skills cancels recording; emergency stop also cancels pending recorder startup.
+
+New/Open/Save/recovery cannot overlap. Native close (including Alt+F4) asks before discarding edits and waits while a file operation is active. Reset stops the runner before clearing settings. Always-on-top is restored at application startup.
+
+Repeat counts must be whole numbers; delays must be finite whole milliseconds, with a maximum effective delay of one day. Concurrent potion and skill channels cannot use the same Q/W/E/R keys; remove the overlap before starting. Jitbit import rejects malformed delay rows and warns about unsupported keyboard tokens.
 
 ## Settings
 
@@ -99,6 +109,8 @@ Settings contains:
 - Emergency-stop shortcut.
 - Auto-stop game process.
 - Combo directory used by file pickers.
+
+Settings are grouped into flat **Window & files**, **Automation**, and **Safety** sections separated by dividers. The game-process picker is searchable and shows the recognizable application or window title above its executable name.
 
 ## Troubleshooting
 

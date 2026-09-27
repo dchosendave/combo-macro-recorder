@@ -35,6 +35,7 @@ New plugins require all of:
 ## Files
 
 - Paths originate from native dialogs, configured combo directories, recent paths, or explicit hotkey profiles.
+- Custom Rust file commands accept the supplied path directly; they do not enforce a dialog-granted path allowlist or extension restriction. Main-window capability scoping is not filesystem path validation for these commands.
 - Save is atomic and retains a previous sibling backup.
 - Recovery requires confirmation and uses the known primary/backup pair.
 - Jitbit import accepts text only and rejects unsupported mixed commands rather than silently executing them.
@@ -47,6 +48,8 @@ Do not broaden commands into arbitrary shell execution or URL opening. Resolve a
 Runner channels own atomic running flags and joinable threads. `KeyReleaseGuard` releases known keys and right-click on normal completion, cancellation, and Rust panic unwinding. App exit calls `stop_all_inner`. A hard process kill cannot run cleanup, which is why an independently configurable emergency shortcut remains valuable during normal operation.
 
 Recording polls keyboard state but intentionally ignores modifier keys. Recorded input remains in memory until converted into editable steps; the app does not transmit it.
+
+The emergency shortcut is dispatched through the WebView before it invokes stop commands; it is not an independent native watchdog. Recorder lifecycle cancellation and session-filtered runner events are covered by regression tests; physical Windows behavior still requires the [manual QA matrix](manual-qa.md).
 
 ## Elevation
 
@@ -61,3 +64,5 @@ Before release:
 - Complete packaged checks in [manual-qa.md](manual-qa.md).
 - Confirm no secrets, telemetry, remote URLs, or unexpected network requests were introduced.
 - Document any new trust boundary or permission here.
+
+CI runs `npm audit --audit-level=high` and RustSec auditing. The repository is MIT licensed; public Windows distribution still requires a separately obtained code-signing certificate to avoid unsigned-installer warnings.

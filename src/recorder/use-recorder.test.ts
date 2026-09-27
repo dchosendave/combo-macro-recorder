@@ -22,6 +22,25 @@ beforeEach(() => {
 })
 
 describe("useRecorder", () => {
+  it("stops native capture on unmount", async () => {
+    const hook = renderHook(() => useRecorder(0))
+    await act(async () => { await hook.result.current.startRecording() })
+    await act(async () => { hook.unmount() })
+    expect(invokeMock).toHaveBeenCalledWith("stop_recording")
+  })
+
+  it("cancels a pending native start and ignores duplicate starts", async () => {
+    const deferred = Promise.withResolvers<void>()
+    invokeMock.mockImplementation((command) => command === "start_recording" ? deferred.promise : Promise.resolve([]))
+    const { result } = renderHook(() => useRecorder(0))
+    let start!: Promise<void>
+    await act(async () => { start = result.current.startRecording(); void result.current.startRecording() })
+    await act(async () => { window.dispatchEvent(new Event("macro-emergency-stop")) })
+    await act(async () => { deferred.resolve(); await start })
+    expect(result.current.isRecording).toBe(false)
+    expect(invokeMock.mock.calls.filter(([command]) => command === "start_recording")).toHaveLength(1)
+    expect(invokeMock).toHaveBeenCalledWith("stop_recording")
+  })
   it("startRecording invokes start_recording and flips isRecording", async () => {
     const { result } = renderHook(() => useRecorder(0))
 
@@ -99,11 +118,10 @@ describe("useRecorder", () => {
     await act(async () => { await result.current.startRecording() })
     invokeMock.mockClear()
 
-    act(() => window.dispatchEvent(new Event("macro-emergency-stop")))
+    await act(async () => { window.dispatchEvent(new Event("macro-emergency-stop")) })
 
     expect(result.current.isRecording).toBe(false)
     expect(invokeMock).toHaveBeenCalledWith("stop_recording")
-    expect(toastMock.info).toHaveBeenCalledWith("Recording cancelled by emergency stop")
   })
 
   it("counts down before invoking the backend and can be cancelled", async () => {

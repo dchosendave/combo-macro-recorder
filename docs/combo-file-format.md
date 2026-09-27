@@ -23,9 +23,9 @@ Combo files are human-readable JSON. New saves use version 4. Import accepts ver
     "repeatCount": "1",
     "playbackSpeed": "1.5",
     "steps": [
-      { "id": "local-uuid", "type": "keydown", "key": "1" },
-      { "id": "local-uuid", "type": "delay", "ms": "120" },
-      { "id": "local-uuid", "type": "keyup", "key": "1", "disabled": true }
+      { "id": "step-down", "type": "keydown", "key": "1" },
+      { "id": "step-delay", "type": "delay", "ms": "120" },
+      { "id": "step-up", "type": "keyup", "key": "1", "disabled": true }
     ]
   }
 }

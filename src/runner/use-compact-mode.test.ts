@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { currentMonitor, getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window"
-import { LogicalSize } from "@tauri-apps/api/dpi"
+import { LogicalSize, PhysicalSize } from "@tauri-apps/api/dpi"
 import { useCompactMode } from "./use-compact-mode"
 
 const winStub = {
@@ -16,6 +16,27 @@ const winStub = {
 }
 
 describe("useCompactMode", () => {
+  it("restores physical size when Stop arrives during entry", async () => {
+    const deferred = Promise.withResolvers<{ width: number; height: number }>()
+    winStub.innerSize.mockReturnValueOnce(deferred.promise)
+    const { result } = renderHook(() => useCompactMode())
+    let entering!: Promise<void>
+    let exiting!: Promise<void>
+    await act(async () => { entering = result.current.enterCompact(); exiting = result.current.exitCompact() })
+    await act(async () => { deferred.resolve({ width: 1800, height: 1200 }); await entering; await exiting })
+    expect(result.current.compactMode).toBe(false)
+    expect(winStub.setSize).toHaveBeenLastCalledWith(new PhysicalSize(1800, 1200))
+    expect(winStub.setResizable).toHaveBeenLastCalledWith(true)
+  })
+
+  it("restores constraints after partial entry failure", async () => {
+    winStub.setPosition.mockRejectedValueOnce(new Error("position failed"))
+    const { result } = renderHook(() => useCompactMode())
+    await act(async () => { await result.current.enterCompact() })
+    expect(result.current.compactMode).toBe(false)
+    expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 700, minHeight: 560 })
+    expect(winStub.setResizable).toHaveBeenLastCalledWith(true)
+  })
   beforeEach(() => {
     vi.mocked(getCurrentWindow).mockReturnValue(winStub as never)
     vi.mocked(currentMonitor).mockResolvedValue({
@@ -61,9 +82,9 @@ describe("useCompactMode", () => {
     // the hook stores `new LogicalSize(current)`, a copy of the resolved innerSize —
     // compare fields (deep), not identity
     const current = { width: 1200, height: 800 }
-    expect(winStub.setSize).toHaveBeenLastCalledWith(new LogicalSize(current))
+    expect(winStub.setSize).toHaveBeenLastCalledWith(new PhysicalSize(current.width, current.height))
     expect(winStub.setResizable).toHaveBeenLastCalledWith(true)
-    expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 660, minHeight: 720 })
+    expect(winStub.setSizeConstraints).toHaveBeenLastCalledWith({ minWidth: 700, minHeight: 560 })
     expect(winStub.setAlwaysOnTop).toHaveBeenCalledWith(false)
   })
 

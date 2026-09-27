@@ -3,7 +3,6 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { AlertCircle, ArrowUp, ArrowDown, CheckCircle2, FileJson, LoaderCircle, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { Kbd } from "@/shared/components/ui/kbd"
-import { Card, CardContent } from "@/shared/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -16,7 +15,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip"
-import { codeToLabel } from "@/shared/keycodes"
+import { codeToLabel, codeToShortcut } from "@/shared/keycodes"
 import { useComboFiles } from "@/combo-file/use-combo-files"
 import { toast } from "sonner"
 import type { HotkeyBinding, HotkeyMode } from "@/shared/types"
@@ -56,7 +55,6 @@ export function HotkeysTab({
   onMoveHotkeyDown,
 }: HotkeysTabProps) {
   const [capturingId, setCapturingId] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
   const { comboFiles } = useComboFiles()
   const duplicateShortcuts = new Set(
     hotkeys.filter((profile, index) => profile.hotkey && hotkeys.findIndex((item) => item.hotkey === profile.hotkey) !== index).map((profile) => profile.hotkey),
@@ -96,13 +94,13 @@ export function HotkeysTab({
       if (e.metaKey) parts.push("Meta")
       parts.push(e.code)
       const combo = parts.join("+")
-      if (emergencyHotkey && combo === emergencyHotkey) {
+      if (emergencyHotkey && codeToShortcut(combo).toLowerCase() === codeToShortcut(emergencyHotkey).toLowerCase()) {
         toast.error("Hotkey is reserved for emergency stop")
         return
       }
-      const dup = hotkeys.find((h) => h.id !== capturingId && h.hotkey === combo)
+      const dup = hotkeys.find((h) => h.id !== capturingId && codeToShortcut(h.hotkey).toLowerCase() === codeToShortcut(combo).toLowerCase())
       if (dup) {
-        toast.error(`Hotkey already used by "${dup.name}"`)
+        toast.error(`Hotkey already used by Hotkey ${hotkeys.indexOf(dup) + 1}`)
         return
       }
       onUpdateHotkey(capturingId, combo)
@@ -134,9 +132,8 @@ export function HotkeysTab({
   }
 
   return (
-    <Card size="sm" className="h-full">
-      <CardContent className="flex flex-1 flex-col gap-3 min-h-0 overflow-y-auto">
-        <Alert className={registrationStatus === "error" || issueCount > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-emerald-500/30 bg-emerald-500/5"}>
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden p-2 text-[13px] [&_button]:text-[13px] [&_input]:text-[13px] [&_label]:text-[13px]">
+        <Alert className={`shrink-0 py-2 ${registrationStatus === "error" || issueCount > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-emerald-500/30 bg-emerald-500/5"}`}>
           {registrationStatus === "pending" ? <LoaderCircle className="animate-spin" /> : registrationStatus === "error" || issueCount > 0 ? <AlertCircle /> : <CheckCircle2 />}
           <AlertTitle>
             {registrationStatus === "pending"
@@ -155,66 +152,45 @@ export function HotkeysTab({
                 : "Configured shortcuts are registered with Windows."}
           </AlertDescription>
         </Alert>
-        <div className="flex flex-col gap-1.5">
-          {hotkeys.map((binding) => {
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border">
+          {hotkeys.map((binding, index) => {
             const issue = profileIssue(binding)
             return (
             <div
               key={binding.id}
-              onClick={() => setSelectedId(binding.id)}
-              className={`flex flex-col gap-1.5 rounded-xl border px-2.5 py-1.5 transition-all cursor-pointer ${
-                selectedId === binding.id
-                  ? "border-primary bg-primary/10 ring-1 ring-primary"
-                  : "hover:bg-muted/50"
-              }`}
+              className="flex flex-col gap-2 border-b px-3 py-2 last:border-b-0"
             >
-              {/* Row 1: Hotkey + Actions */}
               <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">Hotkey {index + 1}</span>
                 <Badge variant={issue ? "destructive" : "outline"} className="shrink-0 text-[10px]">
                   {issue ?? "Ready"}
                 </Badge>
+              </div>
 
-                {/* Hotkey capture — click the badge to start */}
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-3">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">Shortcut</span>
+
                 {capturingId === binding.id ? (
-                  <span className="text-xs font-medium text-primary animate-pulse shrink-0">
-                    Press a key...
-                  </span>
+                  <Button type="button" size="sm" variant="outline" className="h-8 justify-between border-primary text-primary" onClick={() => setCapturingId(null)}>
+                    <span className="animate-pulse">Press a shortcut…</span>
+                    <span className="text-xs">Cancel</span>
+                  </Button>
                 ) : (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setCapturingId(binding.id)
-                          }}
-                          className="shrink-0 flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted cursor-pointer"
-                        >
-                          <Kbd>{codeToLabel(binding.hotkey)}</Kbd>
-                          <Pencil className="size-2.5 text-muted-foreground/50" />
-                        </button>
-                      }
-                    />
-                    <TooltipContent>Click to change hotkey</TooltipContent>
-                  </Tooltip>
+                  <Button type="button" size="sm" variant="outline" className="h-8 justify-between" onClick={() => setCapturingId(binding.id)}>
+                    {binding.hotkey ? <Kbd>{codeToLabel(binding.hotkey)}</Kbd> : <span className="text-muted-foreground">Not set</span>}
+                    <Pencil className="size-3 text-muted-foreground" />
+                  </Button>
                 )}
-                {capturingId === binding.id && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setCapturingId(null)
-                    }}
-                    className="text-xs text-muted-foreground hover:text-foreground shrink-0"
-                  >
-                    Cancel
-                  </button>
-                )}
+                </div>
 
+                <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs font-medium text-muted-foreground">Run mode</span>
                 <Select
                   value={binding.mode ?? "toggle"}
                   onValueChange={(mode) => mode && onUpdateMode(binding.id, mode as HotkeyMode)}
                 >
-                  <SelectTrigger size="sm" className="h-7 w-24 text-xs" onClick={(event) => event.stopPropagation()}>
+                  <SelectTrigger size="sm" className="h-8 w-full border-border bg-background text-[13px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -225,9 +201,9 @@ export function HotkeysTab({
                     <SelectItem value="cycle">Cycle combos</SelectItem>
                   </SelectContent>
                 </Select>
+                </div>
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-0.5 shrink-0">
+                <div className="flex h-8 items-center gap-0.5 shrink-0">
                   <Tooltip>
                     <TooltipTrigger
                       render={
@@ -280,7 +256,6 @@ export function HotkeysTab({
                             onClick={(e) => {
                               e.stopPropagation()
                               onDeleteHotkey(binding.id)
-                              if (selectedId === binding.id) setSelectedId(null)
                             }}
                           >
                             <Trash2 className="size-3" />
@@ -296,6 +271,7 @@ export function HotkeysTab({
               {/* Row 2: File path + Browse / Dropdown */}
               {(binding.mode ?? "toggle") === "cycle" ? (
                 <div className="flex flex-col gap-1.5 pl-0.5" onClick={(event) => event.stopPropagation()}>
+                  <span className="text-xs font-medium text-muted-foreground">Combo sequence</span>
                   {(binding.comboPaths ?? []).map((path, index, paths) => (
                     <div key={path} className="flex items-center gap-1 rounded-md bg-muted/50 px-1.5 py-1">
                       <FileJson className="size-3 shrink-0 text-muted-foreground" />
@@ -314,7 +290,7 @@ export function HotkeysTab({
                   <div className="flex items-center gap-1.5">
                     {comboFiles.length > 0 && (
                       <Select value="" onValueChange={(path) => path && addCyclePath(binding, path)}>
-                        <SelectTrigger size="sm" className="h-7 flex-1 text-xs"><SelectValue placeholder="Add combo…" /></SelectTrigger>
+                        <SelectTrigger size="sm" className="h-8 flex-1 border-border bg-background text-[13px]"><SelectValue placeholder="Add combo…" /></SelectTrigger>
                         <SelectContent>{comboFiles.map((file) => <SelectItem key={file.path} value={file.path}>{file.name}</SelectItem>)}</SelectContent>
                       </Select>
                     )}
@@ -323,7 +299,9 @@ export function HotkeysTab({
                   {(binding.comboPaths ?? []).length === 0 && <p className="text-xs text-muted-foreground">Add at least one combo.</p>}
                 </div>
               ) : (binding.mode ?? "toggle") !== "stop" ? (
-              <div className="flex items-center gap-2 pl-0.5">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs font-medium text-muted-foreground">Combo file</span>
+                <div className="flex items-center gap-2">
                 <FileJson className="size-3.5 shrink-0 text-muted-foreground" />
                 {comboFiles.length > 0 ? (
                   <>
@@ -331,7 +309,7 @@ export function HotkeysTab({
                       value={binding.comboPath ?? ""}
                       onValueChange={(path) => path && onUpdatePath(binding.id, path)}
                     >
-                      <SelectTrigger className="h-7 flex-1 text-xs min-w-0" onClick={(e) => e.stopPropagation()}>
+                      <SelectTrigger className="h-8 flex-1 min-w-0 border-border bg-background text-[13px]">
                         <SelectValue placeholder="Select a combo..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -400,9 +378,10 @@ export function HotkeysTab({
                     Browse…
                   </Button>
                 )}
+                </div>
               </div>
               ) : (
-                <p className="pl-0.5 text-xs text-muted-foreground">Stops whichever macro is active.</p>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">This shortcut stops whichever macro is active; no combo file is needed.</div>
               )}
             </div>
             )
@@ -424,7 +403,6 @@ export function HotkeysTab({
             Pick a combo file, then press the hotkey in-game to start.
           </p>
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }

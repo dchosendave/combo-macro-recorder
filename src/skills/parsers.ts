@@ -1,4 +1,8 @@
 import type { SkillStep } from "@/shared/types"
+import { MAX_DELAY } from "@/shared/defaults"
+
+const DELAY_ROW = /^DELAY\s*:\s*(\d+)\s*(?::\s*\d+\s*)*$/i
+const KEY_ROW = /^Keyboard\s*:\s*([^:]+?)\s*:\s*(KeyDown|KeyUp)\s*(?::\s*\d+\s*)*$/i
 
 /**
  * Named key tokens accepted by Jitbit import. Mirrors the backend's `parse_key`
@@ -33,13 +37,14 @@ export function parseJitbit(text: string): SkillStep[] {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
 
   for (const line of lines) {
-    if (/^DELAY\s*:\s*(\d+)/i.test(line)) {
-      const ms = line.match(/^DELAY\s*:\s*(\d+)/i)![1]
+    if (DELAY_ROW.test(line)) {
+      const ms = line.match(DELAY_ROW)![1]
+      if (!Number.isSafeInteger(Number(ms)) || Number(ms) > MAX_DELAY) continue
       steps.push({ id: crypto.randomUUID(), type: "delay", ms })
       continue
     }
 
-    const kbdMatch = line.match(/^Keyboard\s*:\s*([A-Za-z0-9]+)\s*:\s*(KeyDown|KeyUp)/i)
+    const kbdMatch = line.match(KEY_ROW)
     if (kbdMatch) {
       const raw = kbdMatch[1]
       const key = normalizeKey(raw)
@@ -72,7 +77,7 @@ export type JitbitRejection = {
   reason: string
 }
 
-export type JitbitFileParse = { steps: SkillStep[] } | { rejected: JitbitRejection }
+export type JitbitFileParse = { steps: SkillStep[]; skippedKeys: string[] } | { rejected: JitbitRejection }
 
 /** True for Jitbit mouse rows like `Mouse : 0 : 0 : RightButtonDown : 0 : 1 : 0`. */
 function isRightButtonDownRow(line: string): boolean {
@@ -84,23 +89,29 @@ export function parseJitbitFile(text: string): JitbitFileParse {
   const rawLines = text.split(/\r?\n/)
   const steps: SkillStep[] = []
   const rightButtonDownRows: number[] = []
+  const skippedKeys = new Set<string>()
 
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i].trim()
     if (!line) continue
 
-    if (/^DELAY\s*:\s*(\d+)/i.test(line)) {
-      const ms = line.match(/^DELAY\s*:\s*(\d+)/i)![1]
+    if (DELAY_ROW.test(line)) {
+      const ms = line.match(DELAY_ROW)![1]
+      if (!Number.isSafeInteger(Number(ms)) || Number(ms) > MAX_DELAY) {
+        return { rejected: { line: i + 1, text: line, reason: "delay exceeds one day" } }
+      }
       steps.push({ id: crypto.randomUUID(), type: "delay", ms })
       continue
     }
 
-    const kbdMatch = line.match(/^Keyboard\s*:\s*([A-Za-z0-9]+)\s*:\s*(KeyDown|KeyUp)/i)
+    const kbdMatch = line.match(KEY_ROW)
     if (kbdMatch) {
       const key = normalizeKey(kbdMatch[1])
       if (key) {
         const action = kbdMatch[2].toLowerCase() === "keydown" ? "keydown" : "keyup"
         steps.push({ id: crypto.randomUUID(), type: action, key })
+      } else {
+        skippedKeys.add(kbdMatch[1])
       }
       continue
     }
@@ -145,7 +156,7 @@ export function parseJitbitFile(text: string): JitbitFileParse {
     }
   }
 
-  return { steps }
+  return { steps, skippedKeys: [...skippedKeys] }
 }
 
 /** Build a combo from manual entry: keydowns with inter-key delays, a delay before the keyups, reverse-order keyups, and a final rest delay. */

@@ -20,8 +20,8 @@ export function RepeatModeControl({
   repeatError,
 }: RepeatModeControlProps) {
   return (
-    <div className="flex flex-col gap-2">
-      <Label className="font-normal">Repeat mode</Label>
+    <div className="flex items-center gap-2">
+      <Label className="shrink-0 font-normal">Repeat</Label>
       <div className="flex items-center gap-2">
         <ToggleGroup
           value={[repeatMode]}
@@ -48,17 +48,11 @@ export function RepeatModeControl({
               )
             }}
             placeholder="1"
-            className="w-20 animate-in fade-in-0 slide-in-from-left-2 duration-200"
+            className="h-8 w-20 animate-in fade-in-0 slide-in-from-left-2 duration-200"
           />
         )}
       </div>
-      {repeatMode === "count" && (
-        <p
-          className={`text-xs animate-in fade-in-0 duration-200 ${repeatError ? "text-destructive" : "text-muted-foreground"}`}
-        >
-          {repeatError ? "Minimum is 1." : "How many times to repeat."}
-        </p>
-      )}
+      {repeatMode === "count" && repeatError && <p className="text-xs text-destructive">Enter at least 1.</p>}
     </div>
   )
 }

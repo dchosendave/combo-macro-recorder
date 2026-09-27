@@ -7,7 +7,17 @@ use serde::Deserialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use super::processes::{process_name_matches, running_processes};
-use super::{stop_all_inner, AppState};
+use super::{stop_all_locked, AppState};
+
+fn stop_if_current(state: &AppState, gen: u64) -> Option<u64> {
+    let _guard = state.switch_lock.lock();
+    if state.monitor_gen.load(Ordering::SeqCst) != gen { return None; }
+    let session = state.active_session.load(Ordering::SeqCst);
+    stop_all_locked(&state.potions, &state.skills);
+    state.active_session.store(0, Ordering::SeqCst);
+    state.monitor_gen.fetch_add(1, Ordering::SeqCst);
+    Some(session)
+}
 
 /// How often the focus monitor samples the foreground window. Foreground
 /// queries are cheap user32 calls; sub-second reaction is plenty for a macro
@@ -115,11 +125,12 @@ pub(crate) fn spawn_focus_monitor_with<R: Runtime>(
                 Some(_) if game_seen => match lost_since {
                     None => lost_since = Some(Instant::now()),
                     Some(since) if since.elapsed() >= timing.grace => {
-                        stop_all_inner(&state);
-                        let _ = app.emit(
+                        if let Some(session_id) = stop_if_current(&state, gen) {
+                          let _ = app.emit(
                             "macro-auto-stopped",
-                            serde_json::json!({ "reason": "focus-lost" }),
-                        );
+                            serde_json::json!({ "sessionId": session_id, "reason": "focus-lost" }),
+                          );
+                        }
                         return;
                     }
                     Some(_) => {}
@@ -191,6 +202,7 @@ impl ForegroundProvider for NoopForegroundProvider {
 #[cfg(test)]
 #[cfg(target_os = "windows")]
 mod tests {
+    use crate::runner::stop_all_inner;
     use std::collections::HashSet;
     use std::time::Duration;
 
@@ -201,6 +213,28 @@ mod tests {
     use crate::runner::injector::test_utils::MockInjector;
     use crate::runner::potions::PotionConfig;
     use crate::runner::start_combo_inner;
+
+    #[test]
+    fn stop_rechecks_generation_after_waiting_for_switch_lock() {
+        let state = Arc::new(AppState::default());
+        state.monitor_gen.store(1, Ordering::SeqCst);
+        state.active_session.store(1, Ordering::SeqCst);
+        state.potions.running.store(true, Ordering::SeqCst);
+        let guard = state.switch_lock.lock();
+        let other = state.clone();
+        let (ready, waiting) = std::sync::mpsc::channel();
+        let stop = thread::spawn(move || {
+            ready.send(()).unwrap();
+            stop_if_current(&other, 1)
+        });
+        waiting.recv().unwrap();
+        state.monitor_gen.store(2, Ordering::SeqCst);
+        state.active_session.store(2, Ordering::SeqCst);
+        drop(guard);
+        assert_eq!(stop.join().unwrap(), None);
+        assert!(state.potions.running.load(Ordering::SeqCst));
+        assert_eq!(state.active_session.load(Ordering::SeqCst), 2);
+    }
 
     /// Scripted provider: the test sets the foreground PID and the set of
     /// "game" PIDs, then flips them to simulate the user leaving/returning.
@@ -258,7 +292,7 @@ mod tests {
             None,
             &handle,
             &app.state::<AppState>(),
-        );
+        ).unwrap();
     }
 
     fn running(state: &AppState) -> bool {

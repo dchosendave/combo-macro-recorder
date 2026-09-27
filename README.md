@@ -23,7 +23,7 @@ A Tauri 2 + React 19 desktop app for building, recording, and globally triggerin
 5. Create a Hotkeys profile, choose its mode, and assign the combo file.
 6. Focus the game and use the shortcut. Use the compact bar, a Stop-only profile, or the optional emergency shortcut to stop safely.
 
-The Help item at the bottom of the sidebar provides an always-available feature refresher. The complete workflow is in the [user guide](docs/user-guide.md).
+The Help tab provides an always-available feature refresher. The complete workflow is in the [user guide](docs/user-guide.md).
 
 ## Combo files
 
@@ -62,6 +62,10 @@ cargo test
 ```
 
 See [testing.md](docs/testing.md) and [manual-qa.md](docs/manual-qa.md).
+
+## License
+
+[MIT](LICENSE)
 
 ## Platform notes
 

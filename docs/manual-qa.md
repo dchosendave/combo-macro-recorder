@@ -4,19 +4,31 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Startup and files
 
+- [ ] Open A, edit it, trigger profile B, then Save: verify A stays dirty and Save writes A while B remains unchanged.
+- [ ] Alt+F4 and taskbar Close respect unsaved changes, as does the custom close button.
+- [ ] Start Save/Open, then request New or another Open before completion; stale results must not change the current document.
 - [ ] Fresh storage shows the welcome dialog once.
-- [ ] Help can be reopened from the sidebar without changing the current combo.
+- [ ] Help can be reopened from the navigation bar without changing the current combo.
 - [ ] New/Open/Save/Save As and recent files behave correctly.
 - [ ] Unsaved changes prompt before destructive open/new/close actions.
-- [ ] Editing shows the Unsaved badge and emphasized Save action; a successful save clears both and shows a last-save time on a wide window.
+- [ ] Editing shows the Unsaved badge; a successful save clears it and re-enables Save only after another edit.
 - [ ] Second save creates a readable `.bak` containing the previous version.
 - [ ] A damaged primary plus valid backup offers recovery; Cancel is non-destructive and Recover restores the primary.
 - [ ] Auto-load succeeds for a valid last path and degrades safely for a missing/corrupt path.
 
 ## Potions and skills editor
 
-- [ ] Minimum 660×720 window remains usable; resizing does not clip card borders or timeline ends.
-- [ ] List and Timeline show the same step order; Timeline remains read-only whether the List editor is locked or unlocked.
+- [ ] Minimum 700×560 window remains usable; resizing does not clip controls, card borders, or timeline ends.
+- [ ] The app shell never document-scrolls into blank space; only the macro list and intentionally overflowing tab content scroll.
+- [ ] Flat tab layouts have no clipped dividers or unintended nested borders at minimum and default window sizes.
+- [ ] Potions and Settings never show a horizontal scrollbar at minimum, default, or maximized window sizes.
+- [ ] Each Q/W/E/R option toggles exactly once from either its card surface or the switch itself, including keyboard activation.
+- [ ] Actions, inputs, menus, and dialogs use consistent soft rectangles; status badges, switches, and key chips remain pill-shaped.
+- [ ] List and Timeline show the same order and selection; Timeline remains read-only whether the List editor is locked or unlocked.
+- [ ] Turning Run skills off leaves the editor usable, preserves all steps, and excludes the Skills channel from playback.
+- [ ] The dense List header remains visible while scrolling; Type, Value, and Actions columns stay aligned without clipping.
+- [ ] The Skills list scrolls with the wheel, trackpad, and keyboard without showing a scrollbar track.
+- [ ] The View menu switches List/Timeline and text/icon labels without changing the saved choice unexpectedly.
 - [ ] Ctrl/Shift selection, Ctrl+A, Delete, Ctrl+D, block drag, and bulk delay operations work.
 - [ ] Dragging from the row body reorders one or multiple selected steps; inputs, key pickers, and action buttons do not accidentally start a drag.
 - [ ] Copy/cut/paste preserves order and assigns independent steps.
@@ -24,10 +36,12 @@ Use this checklist before a release or after changes to Windows integration, lay
 - [ ] Disabling a matching KeyUp shows the unmatched-KeyDown warning.
 - [ ] Timeline reaches and fully displays its last step when horizontally scrolled.
 - [ ] Timeline start/active/end, zoom, Fit, and Follow controls work; Follow off does not pull the viewport during playback.
-- [ ] Dragging the playback-speed slider changes its readout and effective duration without rewriting source delays; Reset returns to 1× and controls lock during a run.
+- [ ] The Playback popover changes speed/repeat settings without resizing the editor; Reset returns to 1× and speed controls lock during a run.
 
 ## Recording
 
+- [ ] Leave Skills during capture, return, and record again; no orphan capture remains.
+- [ ] Emergency stop during the backend start acknowledgement prevents recording from becoming active afterward.
 - [ ] 3/5/10/custom countdowns start at the configured duration.
 - [ ] Escape, Cancel, and emergency stop cancel countdown without starting backend capture.
 - [ ] Recording captures normal and rapid physical taps; follow [recorder-reliability.md](recorder-reliability.md).
@@ -36,6 +50,12 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Hotkeys and runner
 
+- [ ] The flat Hotkeys list numbers rows sequentially (`Hotkey 1`, `Hotkey 2`, …) and immediately shows status plus labeled Shortcut, Run mode, and Combo fields; reordering updates the visible numbers.
+- [ ] Every unlocked skill row drags from its non-interactive surface; inputs and action buttons edit or activate without starting a drag.
+- [ ] The game-process picker is wide enough to distinguish friendly names and executable names at the minimum window size.
+- [ ] Release Hold before file loading/start acknowledgement completes; the macro must remain stopped.
+- [ ] Switch profiles as focus auto-stop fires; an old monitor/event must not stop or hide the new run.
+- [ ] Expand a running macro and Reset; backend and frontend both become stopped.
 - [ ] Duplicate profile/emergency shortcuts are rejected.
 - [ ] Hotkey health reports registration success/failure, conflicts, missing cycle assignments, and unavailable combo files.
 - [ ] Toggle starts and stops.
@@ -49,6 +69,8 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Compact mode and visualization
 
+- [ ] Stop immediately after Start and run very short Repeat-N combos; late compact entry must not leave a stopped overlay.
+- [ ] Repeat enter/exit at 125%, 150%, and 200% scaling; the original physical window size must remain unchanged.
 - [ ] Confirm compact mode in every configured corner and `auto`.
 - [ ] Compact bar is always on top, square-cornered, and fully visible.
 - [ ] Expand Editor restores the window while playback continues.

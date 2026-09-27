@@ -55,6 +55,52 @@ beforeEach(() => {
 })
 
 describe("useMacroRunner", () => {
+  it("ignores a mount response arriving after a confirmed start", async () => {
+    const deferred = Promise.withResolvers<typeof STOPPED>()
+    invokeMock.mockImplementation((command) => command === "get_runner_status" ? deferred.promise : Promise.resolve(RUNNING_POTIONS))
+    const { result } = renderRunner()
+    await act(async () => { await result.current.startCombo(POTIONS_ONLY) })
+    await act(async () => { deferred.resolve(STOPPED) })
+    expect(result.current.potionsRunning).toBe(true)
+  })
+
+  it("does not resurrect a session that finishes before startup acknowledges", async () => {
+    const { result, onStart } = renderRunner()
+    const deferred = Promise.withResolvers<typeof RUNNING_POTIONS>()
+    invokeMock.mockImplementation((command) => command === "start_combo" ? deferred.promise : Promise.resolve(STOPPED))
+    let start!: Promise<boolean>
+    await act(async () => { start = result.current.startCombo(POTIONS_ONLY) })
+    await act(async () => { await fireTauriEvent("macro-finished", { sessionId: 1, channel: "potions", cycle: 3, reason: "repeat-complete" }) })
+    await act(async () => { deferred.resolve(RUNNING_POTIONS); await start })
+    expect(result.current.anyRunning).toBe(false)
+    expect(result.current.potionsCycles).toBe(3)
+    expect(onStart).not.toHaveBeenCalled()
+  })
+
+  it("preserves an existing run when a switch is rejected", async () => {
+    const { result } = renderRunner()
+    await act(async () => { await result.current.startCombo(POTIONS_ONLY) })
+    invokeMock.mockImplementation((command) => command === "start_combo" ? Promise.reject("invalid input") : Promise.resolve(RUNNING_POTIONS))
+    await act(async () => { await result.current.startCombo(POTIONS_ONLY) })
+    expect(result.current.potionsRunning).toBe(true)
+  })
+
+  it("resets per-session counters and ignores old completion/focus events", async () => {
+    vi.useFakeTimers()
+    const { result } = renderRunner()
+    await act(async () => { await result.current.startCombo(POTIONS_ONLY) })
+    act(() => vi.advanceTimersByTime(2000))
+    await act(async () => { await fireTauriEvent("macro-activation", { sessionId: 1, channel: "potions", cycle: 20 }) })
+    invokeMock.mockResolvedValueOnce({ ...RUNNING_POTIONS, sessionId: 2 })
+    await act(async () => { await result.current.startCombo(POTIONS_ONLY) })
+    await act(async () => {
+      await fireTauriEvent("macro-finished", { sessionId: 1, channel: "potions", cycle: 25, reason: "repeat-complete" })
+      await fireTauriEvent("macro-auto-stopped", { sessionId: 1, reason: "focus-lost" })
+    })
+    expect(result.current.potionsRunning).toBe(true)
+    expect(result.current.elapsed).toBe(0)
+    expect(result.current.potionsCycles).toBe(0)
+  })
   it("warns and does not invoke when neither channel can run", async () => {
     const { result, onStart } = renderRunner()
     await act(async () => { await result.current.startCombo(NEITHER) })
@@ -96,7 +142,7 @@ describe("useMacroRunner", () => {
     expect(result.current.commandPending).toBe(false)
   })
 
-  it("clears both channels and reports failure when start rejects", async () => {
+  it("reconciles stopped state when start rejects", async () => {
     const { result, onStop } = renderRunner()
     invokeMock.mockRejectedValueOnce(new Error("boom"))
     await act(async () => {
@@ -104,7 +150,7 @@ describe("useMacroRunner", () => {
     })
     expect(result.current.potionsRunning).toBe(false)
     expect(result.current.skillsRunning).toBe(false)
-    expect(onStop).toHaveBeenCalledTimes(1)
+    expect(onStop).not.toHaveBeenCalled()
     expect(toastMock.error).toHaveBeenCalledWith("Failed to start macro: Error: boom")
   })
 
@@ -147,9 +193,11 @@ describe("useMacroRunner", () => {
 
   it("mirrors macro-activation events into cycle counters", async () => {
     const { result } = renderRunner()
+    invokeMock.mockResolvedValueOnce(RUNNING_BOTH)
+    await act(async () => { await result.current.startCombo(BOTH) })
     await act(async () => {
-      await fireTauriEvent("macro-activation", { channel: "potions", cycle: 42 })
-      await fireTauriEvent("macro-activation", { channel: "skills", cycle: 7 })
+      await fireTauriEvent("macro-activation", { sessionId: 1, channel: "potions", cycle: 42 })
+      await fireTauriEvent("macro-activation", { sessionId: 1, channel: "skills", cycle: 7 })
     })
     expect(result.current.potionsCycles).toBe(42)
     expect(result.current.skillsCycles).toBe(7)
@@ -179,7 +227,7 @@ describe("useMacroRunner", () => {
 
     // Skills finish while potions still run → no onStop.
     await act(async () => {
-      await fireTauriEvent("macro-finished", { channel: "skills", reason: "repeat-complete" })
+      await fireTauriEvent("macro-finished", { sessionId: 1, cycle: 5, channel: "skills", reason: "repeat-complete" })
     })
     expect(result.current.skillsRunning).toBe(false)
     expect(result.current.lastStopReason).toBe("repeat-complete")
@@ -190,15 +238,16 @@ describe("useMacroRunner", () => {
     expect(onStop).toHaveBeenCalledTimes(1)
 
     await act(async () => {
-      await fireTauriEvent("macro-finished", { channel: "skills" })
+      await fireTauriEvent("macro-finished", { sessionId: 1, cycle: 5, channel: "skills" })
     })
-    expect(onStop).toHaveBeenCalledTimes(2)
+    expect(onStop).toHaveBeenCalledTimes(1)
   })
 
   it("records focus loss and startup failure outcomes", async () => {
     const { result } = renderRunner()
+    await act(async () => { await result.current.startCombo(POTIONS_ONLY) })
     await act(async () => {
-      await fireTauriEvent("macro-auto-stopped", { reason: "focus-lost" })
+      await fireTauriEvent("macro-auto-stopped", { sessionId: 1, reason: "focus-lost" })
     })
     expect(result.current.lastStopReason).toBe("focus-lost")
 
@@ -248,7 +297,7 @@ describe("useMacroRunner", () => {
     expect(result.current.potionsRunning).toBe(true)
 
     await act(async () => {
-      await fireTauriEvent("macro-auto-stopped", { reason: "focus-lost" })
+      await fireTauriEvent("macro-auto-stopped", { sessionId: 1, reason: "focus-lost" })
     })
 
     expect(result.current.potionsRunning).toBe(false)

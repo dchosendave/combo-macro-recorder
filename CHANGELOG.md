@@ -17,15 +17,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Load all tabs with the desktop app so the first tab switch no longer flashes a loading state.
+- Present skill steps in a dense command grid with a sticky header and inline values while preserving selection and drag behavior.
+- Consolidate Skills layout and step-label choices into one compact View menu.
+- Hide the Skills list scrollbar while retaining wheel, trackpad, and keyboard scrolling.
+- Keep the Skills editor visible when its channel is excluded from playback; the switch now controls execution only.
+- Show hotkeys as sequentially numbered rows in one flat, divided list with always-visible shortcut, mode, combo, and status fields.
+- Prevent the Potions and Settings tabs from showing spurious horizontal scrollbars.
+- Let Q/W/E/R potion switches and their surrounding cards both toggle reliably without duplicate activation.
+- Cancel pending Hold/recording starts, protect dirty documents across profile playback and native close, and serialize file operations.
+- Reconcile runner sessions, focus stops, injection failures, Reset, and compact window restoration.
+- Validate numeric inputs and overlapping channel keys, normalize preferences, roll back hotkey registration, and preserve numpad shortcuts.
+- Validate Jitbit rows and UTF-16 input, report skipped keys, and recognize uppercase JSON file extensions.
+
 - Combo-file settings saved while a hotkey preload read was still in flight could be reverted to the pre-save state on the next hotkey press (e.g. the "hold right mouse button" toggle coming back on after save/run/stop). A cache generation guard now re-reads instead of caching stale snapshots.
 
 ### Added
 
 - Auto-stop on focus loss: when enabled (Settings → Auto-stop), the macro stops shortly after you switch away from the game window; a toast explains why. The game process is set from a searchable picker that shows friendly names (exe version resource / window title) plus the file name, or typed by hand.
-- New Settings page (sidebar item): Always on top, auto-load on startup, combo files directory, and compact-overlay corner moved out of the Hotkeys tab, which now only manages hotkey bindings.
+- New Settings tab: Always on top, auto-load on startup, combo files directory, and compact-overlay corner moved out of Hotkeys, which now only manages hotkey bindings.
 - The current file name in the top bar is now a dropdown listing every `.json` combo in the combo directory (the one configured in the Hotkeys tab); picking one opens it through the normal unsaved-changes flow.
-- Left sidebar navigation (collapsible icon rail, Ctrl+B, persisted): Combo with Potions/Skills sub-items and Hotkeys replace the stacked tab bars; the top bar now holds only contextual actions.
-- Window now opens at a 16:9 default sized to ~2/3 of the screen's work-area width (1280x720 on a 1080p monitor), scaling up proportionally on larger screens.
+- Compact desktop layout: static top navigation replaces the collapsible sidebar, file actions share one menu, and the window defaults to 860x620 with a 700x560 minimum.
+- Flat, denser tabs: Skills prioritizes the step list and moves playback controls into a popover; Potions uses one QWER row; Hotkeys uses complete profile forms; Settings uses divided two-column sections and a wider process picker.
+- Consistent desktop styling: content typography is normalized, general controls use soft rectangles, and pill shapes are reserved for status, switches, and key chips.
 - Recent Combos dropdown (History button in the header) listing the last 8 opened/saved combo files, with click-to-reopen through the normal unsaved-changes flow and stale entries dropped on failed reads.
 - Comprehensive automated test suite: frontend pure logic + all hooks (vitest + jsdom + `@testing-library/react`, 181 tests) and backend gaps (56 Rust tests, including the hotkey diff/rollback, channel stop semantics, and error paths).
 - CI workflow (`.github/workflows/test.yml`) running `npm test` + `cargo test` on `windows-latest` for every push/PR.
@@ -113,7 +127,8 @@ Core app. This section is reconstructed from commit history and is approximate.
 - Repeat counts match Jitbit/Razer Macro timing behavior.
 
 <!--
-Maintenance: add a new section for each release. Releases are created by
-bumping the version (scripts/bump-version.ps1) and pushing a `v*` tag; the CI
-workflow uploads the installer to a draft GitHub release.
+Maintenance: Release Please maintains release sections and version bumps.
+Merging its release PR creates the tag and draft release; the release workflow
+builds and uploads installers. See docs/development-workflow.md for the normal
+release path and emergency version-bump fallback.
 -->

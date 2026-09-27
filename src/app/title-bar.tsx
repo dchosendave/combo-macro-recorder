@@ -29,7 +29,7 @@ export function TitleBar({ onRequestClose }: { onRequestClose: () => void }) {
   }, [onRequestClose])
 
   return (
-    <div className="flex h-8 shrink-0 items-center select-none">
+    <div className="flex h-7 shrink-0 items-center select-none">
       <span
         data-tauri-drag-region
         className="flex-1 pl-3 text-xs font-medium text-muted-foreground h-full flex items-center"

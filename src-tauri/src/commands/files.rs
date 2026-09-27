@@ -128,6 +128,9 @@ pub fn read_jitbit_file(path: String) -> Result<String, String> {
 }
 
 fn decode_text(bytes: &[u8]) -> Option<String> {
+    if (bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF])) && bytes.len() % 2 != 0 {
+        return None;
+    }
     if bytes.starts_with(&[0xFF, 0xFE]) {
         // UTF-16 LE with BOM
         let units: Vec<u16> = bytes[2..]
@@ -161,7 +164,7 @@ pub fn list_combo_files(path: String) -> Result<Vec<ComboFileEntry>, String> {
     for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let entry_path = entry.path();
-        if entry_path.extension().map(|e| e == "json").unwrap_or(false) {
+        if entry_path.is_file() && entry_path.extension().is_some_and(|e| e.eq_ignore_ascii_case("json")) {
             if let Some(name) = entry_path.file_name().and_then(|n| n.to_str()) {
                 entries.push(ComboFileEntry {
                     name: name.to_string(),
@@ -180,6 +183,18 @@ mod tests {
     use std::fs;
 
     use super::*;
+
+    #[test]
+    fn rejects_odd_utf16_and_lists_uppercase_extensions_but_not_directories() {
+        assert!(decode_text(&[0xff, 0xfe, 0x41]).is_none());
+        assert!(decode_text(&[0xfe, 0xff, 0x41]).is_none());
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("directory.json")).unwrap();
+        fs::write(dir.path().join("combo.JSON"), "{}").unwrap();
+        let entries = list_combo_files(dir.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "combo.JSON");
+    }
 
     #[test]
     fn save_then_read_round_trips() {

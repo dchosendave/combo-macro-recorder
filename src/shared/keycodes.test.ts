@@ -5,7 +5,7 @@ describe("codeToShortcut", () => {
   const cases: Array<[string, string]> = [
     ["KeyQ", "Q"],
     ["Digit1", "1"],
-    ["Numpad0", "0"],
+    ["Numpad0", "Numpad0"],
     ["F5", "F5"],
     ["F12", "F12"],
     ["Control+F5", "Control+F5"],

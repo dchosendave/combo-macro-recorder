@@ -80,6 +80,7 @@ export function useSettings() {
     playbackSpeed: skills.playbackSpeed, setPlaybackSpeed: skills.setPlaybackSpeed,
     skillsRepeatError: skills.skillsRepeatError, skillsCanRun: skills.skillsCanRun,
     skillsKeyError: skills.skillsKeyError, unmatchedKeydowns: skills.unmatchedKeydowns,
+    skillsDelayError: skills.skillsDelayError,
     // Undo/Redo
     undoSteps: skills.undoSteps, redoSteps: skills.redoSteps,
     canUndoSteps: skills.canUndo, canRedoSteps: skills.canRedo,

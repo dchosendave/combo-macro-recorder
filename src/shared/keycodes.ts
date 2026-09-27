@@ -5,7 +5,7 @@ function resolveShortcutCode(code: string): string {
 
   if (code.startsWith("Key")) return code.slice(3)
   if (code.startsWith("Digit")) return code.slice(5)
-  if (code.startsWith("Numpad")) return code.slice(6)
+  if (code.startsWith("Numpad")) return code
 
   const codeNames: Record<string, string> = {
     ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",

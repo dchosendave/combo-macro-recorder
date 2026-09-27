@@ -59,6 +59,7 @@ pub(crate) fn sleep_precise(ms: u64, running: &AtomicBool) {
 
     // Build a relative negative due time in 100ns intervals.
     // SetWaitableTimer interprets negative values as relative time from "now".
+    let ms = ms.min(super::MAX_DELAY);
     let due_time: i64 = -(ms as i64) * 10_000;
 
     unsafe {

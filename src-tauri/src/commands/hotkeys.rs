@@ -20,17 +20,16 @@ pub struct HotkeyState {
 }
 
 /// Normalizes each shortcut string to the plugin's canonical form and maps it
-/// to its hotkey id. Invalid shortcut strings pass through unchanged.
-fn build_mappings(hotkeys: &[HotkeyMapping]) -> HashMap<String, String> {
-    hotkeys
-        .iter()
-        .map(|h| {
-            let key = Shortcut::from_str(&h.shortcut)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|_| h.shortcut.clone());
-            (key, h.hotkey_id.clone())
-        })
-        .collect()
+/// to its hotkey id. Reject ambiguity before touching OS registrations.
+fn build_mappings(hotkeys: &[HotkeyMapping]) -> Result<HashMap<String, String>, String> {
+    let mut mappings = HashMap::new();
+    for h in hotkeys {
+        let key = Shortcut::from_str(&h.shortcut).map_err(|e| e.to_string())?.to_string();
+        if mappings.insert(key.clone(), h.hotkey_id.clone()).is_some() {
+            return Err(format!("Duplicate shortcut: {key}"));
+        }
+    }
+    Ok(mappings)
 }
 
 /// (to_unregister, to_register) — keys present only in `current` vs only in `new`.
@@ -60,13 +59,21 @@ fn apply_hotkey_diff(
     unregister: impl Fn(&str) -> Result<(), String>,
     register: impl Fn(&str) -> Result<(), String>,
 ) -> Result<(), String> {
-    for key in to_unregister {
-        let _ = unregister(key);
+    for (index, key) in to_unregister.iter().enumerate() {
+        if let Err(mut error) = unregister(key) {
+            for removed in &to_unregister[..index] {
+                if let Err(rollback) = register(removed) { error.push_str(&format!("; rollback: {rollback}")); }
+            }
+            return Err(error);
+        }
     }
-    for key in to_register {
-        if let Err(e) = register(key) {
+    for (index, key) in to_register.iter().enumerate() {
+        if let Err(mut e) = register(key) {
+            for added in to_register[..index].iter().rev() {
+                if let Err(rollback) = unregister(added) { e.push_str(&format!("; rollback: {rollback}")); }
+            }
             for rolled in to_unregister {
-                let _ = register(rolled);
+                if let Err(rollback) = register(rolled) { e.push_str(&format!("; rollback: {rollback}")); }
             }
             return Err(e);
         }
@@ -76,7 +83,7 @@ fn apply_hotkey_diff(
 
 /// Replaces the set of registered global shortcuts, diffing against the current
 /// mappings: unregisters keys that are no longer present and registers new ones.
-/// On a shortcut press, `lib.rs` emits a `macro-toggle` event carrying the hotkey id.
+/// On each transition, `lib.rs` emits a `macro-hotkey` event carrying the hotkey id.
 #[tauri::command]
 pub fn set_hotkeys(
     hotkeys: Vec<HotkeyMapping>,
@@ -87,7 +94,7 @@ pub fn set_hotkeys(
 
     let mut mappings = state.mappings.lock();
 
-    let new_mappings = build_mappings(&hotkeys);
+    let new_mappings = build_mappings(&hotkeys)?;
     let (to_unregister, to_register) = diff_hotkeys(&mappings, &new_mappings);
 
     // The closures capture only `gs`, never the `mappings` guard, so the
@@ -121,7 +128,7 @@ mod tests {
 
     #[test]
     fn valid_shortcuts_normalize_and_map_to_ids() {
-        let mappings = build_mappings(&[mapping("F5", "a"), mapping("Control+F5", "b")]);
+        let mappings = build_mappings(&[mapping("F5", "a"), mapping("Control+F5", "b")]).unwrap();
         assert_eq!(mappings.len(), 2);
         assert_eq!(mappings.get("F5").map(String::as_str), Some("a"));
         // The plugin canonicalizes modifiers to lowercase.
@@ -129,21 +136,24 @@ mod tests {
     }
 
     #[test]
-    fn invalid_shortcuts_pass_through_unchanged() {
-        let mappings = build_mappings(&[mapping("NotAKey", "a")]);
-        assert_eq!(mappings.get("NotAKey").map(String::as_str), Some("a"));
+    fn invalid_shortcuts_are_rejected() {
+        assert!(build_mappings(&[mapping("NotAKey", "a")]).is_err());
     }
 
     #[test]
-    fn duplicate_shortcuts_last_wins() {
-        let mappings = build_mappings(&[mapping("F5", "first"), mapping("F5", "second")]);
-        assert_eq!(mappings.len(), 1);
-        assert_eq!(mappings.get("F5").map(String::as_str), Some("second"));
+    fn duplicate_shortcuts_are_rejected() {
+        assert!(build_mappings(&[mapping("F5", "first"), mapping("F5", "second")]).is_err());
     }
 
     #[test]
     fn empty_list_builds_empty_mappings() {
-        assert!(build_mappings(&[]).is_empty());
+        assert!(build_mappings(&[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn numpad_and_top_row_remain_distinct_and_alias_conflicts_are_rejected() {
+        assert_eq!(build_mappings(&[mapping("Numpad0", "num"), mapping("0", "top")]).unwrap().len(), 2);
+        assert!(build_mappings(&[mapping("Control+KeyA", "a"), mapping("Ctrl+A", "b")]).is_err());
     }
 
     #[test]
@@ -226,11 +236,11 @@ mod tests {
         assert_eq!(result, Err("shortcut taken".to_string()));
         // The failed register is followed by a best-effort re-register of every
         // removed key, so the caller's state is left unchanged.
-        assert_eq!(*log.lock().unwrap(), vec!["u:F5", "r:F6", "r:F7", "r:F5"]);
+        assert_eq!(*log.lock().unwrap(), vec!["u:F5", "r:F6", "r:F7", "u:F6", "r:F5"]);
     }
 
     #[test]
-    fn apply_hotkey_diff_ignores_unregister_errors() {
+    fn apply_hotkey_diff_stops_on_unregister_errors() {
         let log = std::sync::Mutex::new(Vec::new());
         let unregister = |_key: &str| Err("unregister failed".into());
         let register = |key: &str| {
@@ -238,11 +248,7 @@ mod tests {
             Ok(())
         };
 
-        apply_hotkey_diff(&["F5".into()], &["F6".into()], unregister, register).unwrap();
-        assert_eq!(
-            *log.lock().unwrap(),
-            vec!["r:F6"],
-            "registration still proceeds"
-        );
+        assert!(apply_hotkey_diff(&["F5".into()], &["F6".into()], unregister, register).is_err());
+        assert!(log.lock().unwrap().is_empty());
     }
 }
