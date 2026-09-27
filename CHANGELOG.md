@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Load all tabs with the desktop app so the first tab switch no longer flashes a loading state.
 - Cancel pending Hold/recording starts, protect dirty documents across profile playback and native close, and serialize file operations.
 - Reconcile runner sessions, focus stops, injection failures, Reset, and compact window restoration.
 - Validate numeric inputs and overlapping channel keys, normalize preferences, roll back hotkey registration, and preserve numpad shortcuts.

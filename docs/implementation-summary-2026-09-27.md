@@ -37,7 +37,7 @@ The starting baseline was commit `25a6aa6`, application version `1.0.12`, with a
 ### Runtime and maintenance improvements
 
 - Skill activation events are throttled near 60 Hz, like progress events, to reduce WebView event traffic in fast loops.
-- Skills, Hotkeys, and Settings tabs load on demand. The initial JavaScript chunk decreased from approximately 743 kB to 553 kB uncompressed. The 500 kB build warning remains.
+- Skills, Hotkeys, and Settings initially loaded on demand, but this was later reverted so first-time tab navigation is immediate. Unused UI dependencies were removed instead.
 - The Cargo workspace explicitly uses resolver 2. The root workspace and target-directory configuration were retained.
 - Both version-bump helpers now print guidance matching the Release Please/manual rebuild workflow instead of recommending tag pushes as the packaging trigger.
 - Existing dependencies and UI primitives were not broadly removed; that cleanup remains lower priority than physical functionality verification.

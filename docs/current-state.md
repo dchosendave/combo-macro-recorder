@@ -15,6 +15,7 @@ Validate the completed functional and compact-UI work on Windows, fix any reprod
 - Maintained behavior is documented in [user-guide.md](user-guide.md), [architecture.md](architecture.md), [contracts.md](contracts.md), and [combo-file-format.md](combo-file-format.md).
 - The consequential profile-execution and key-ownership decisions are recorded in [ADR 0005](decisions/0005-profile-execution-and-key-ownership.md).
 - Unused generated UI primitives and seven unused UI dependencies were removed; the production CSS bundle dropped from 193.66 kB to 92.40 kB.
+- Feature tabs load with the desktop app so their first selection is immediate and has no loading fallback.
 - Package and Rust metadata identify Lowie Dave Dichoson and the repository now carries an MIT license.
 - Application version remains `1.0.12`; no release was published as part of the implementation session.
 

@@ -15,7 +15,7 @@ Baseline: `25a6aa6`, version `1.0.12`. The initial working tree was clean. The 2
 | Window lifecycle | Serialized compact transitions, partial-failure restoration, physical-size preservation, startup always-on-top | 100%/150%/mixed-DPI monitor tests |
 | Input failures | Injector errors propagate; worker panic/error clears channel state and emits failure; key-release guards retained | Elevated/non-elevated game injection |
 | File cache and imports | Recovery invalidates cache; reads retry until stable; strict Jitbit syntax/skipped-key warnings; malformed UTF-16 rejected; regular `.JSON` files recognized | Representative external macro files |
-| Maintenance | Release helper guidance corrected; Cargo resolver explicit; feature tabs load on demand; contracts/guides/QA/ADR updated | Bundle/dependency cleanup remains lower priority |
+| Maintenance | Release helper guidance corrected; Cargo resolver explicit; unused UI dependencies removed; contracts/guides/QA/ADR updated | Further bundle cleanup remains lower priority |
 
 ## Automated evidence
 
@@ -24,7 +24,7 @@ Baseline: `25a6aa6`, version `1.0.12`. The initial working tree was clean. The 2
 - `npm run build`: strict TypeScript and production bundling passed.
 - `npm run version:check`: all five version files agree on `1.0.12`.
 - `git diff --check`: passed (Git reports line-ending normalization notices).
-- Initial JavaScript chunk reduced from approximately 743 kB to 553 kB uncompressed by loading feature tabs on demand. The 500 kB warning remains; it does not fail the build.
+- Unused generated UI dependencies were removed. Tabs load eagerly to keep first navigation instant; the resulting main-chunk warning does not fail the build.
 - `npm run tauri -- build -- --locked`: optimized Windows app, MSI, and NSIS installers built successfully. The first sandboxed attempt could not run the WiX linker; the approved unrestricted retry passed. Artifacts are under `src-tauri/target/release/bundle/{msi,nsis}/`.
 
 Regression coverage includes Hold release during load/start, recorder teardown/start cancellation, dirty A - execute B - Save A, native close/busy guards, recovery invalidation, delayed runner status, completion before acknowledgement, stale session events/focus monitors, rejected switches, hotkey rollback/canonical conflicts, malformed numeric/preferences inputs, and compact transition failures.
