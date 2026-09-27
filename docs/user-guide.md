@@ -84,7 +84,7 @@ Cycle mode skips unavailable files and warns. Hotkeys appear in one flat, divide
 
 ## Running and stopping
 
-Run validates the enabled channels and waits for backend confirmation. The window then enters a compact always-on-top bar. Use its Expand Editor button to keep playback running while viewing the active List or Timeline step. Progress highlighting is visual-only and does not alter playback timing.
+Run validates the enabled channels and waits for backend confirmation. The window then enters a compact always-on-top bar, which reports potion and skill cycles separately because the channels run independently. Use its Expand Editor button to keep playback running while viewing the active List or Timeline step. Progress highlighting is visual-only and does not alter playback timing.
 
 Stop from the compact bar, the configured hotkey mode, the main header, or the optional emergency-stop shortcut. Emergency stop is intentionally unset until configured in Settings.
 

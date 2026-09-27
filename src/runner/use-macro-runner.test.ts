@@ -201,7 +201,6 @@ describe("useMacroRunner", () => {
     })
     expect(result.current.potionsCycles).toBe(42)
     expect(result.current.skillsCycles).toBe(7)
-    expect(result.current.totalCycles).toBe(49)
   })
 
   it("shows step progress only for the active skills session", async () => {

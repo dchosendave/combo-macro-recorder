@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Report Potion and Skill cycles separately in compact mode instead of combining two independent counters.
 - Load all tabs with the desktop app so the first tab switch no longer flashes a loading state.
 - Present skill steps in a dense command grid with a sticky header and inline values while preserving selection and drag behavior.
 - Consolidate Skills layout and step-label choices into one compact View menu.

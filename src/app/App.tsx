@@ -93,7 +93,8 @@ function App() {
     potionsRunning,
     skillsRunning,
     elapsed,
-    totalCycles,
+    potionsCycles,
+    skillsCycles,
     activeSkillStepIndex,
     lastStopReason,
     toggleRunning,
@@ -231,7 +232,8 @@ function App() {
     return (
       <CompactOverlay
         elapsed={elapsed}
-        activations={totalCycles}
+        potionsCycles={potionsCycles}
+        skillsCycles={skillsCycles}
         potionsActive={potionsRunning}
         skillsActive={skillsRunning}
         hotkey={codeToLabel(settings.hotkey)}

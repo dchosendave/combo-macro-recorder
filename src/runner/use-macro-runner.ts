@@ -181,6 +181,6 @@ export function useMacroRunner(args: UseMacroRunnerArgs) {
   return {
     ...status, commandPending, anyRunning, elapsed, potionsCycles, skillsCycles,
     activeSkillStepIndex: status.skillsRunning && skillStepEvent?.sessionId === status.sessionId ? skillStepEvent.stepIndex : null,
-    lastStopReason, totalCycles: potionsCycles + skillsCycles, toggleRunning, startCombo, stopAll,
+    lastStopReason, toggleRunning, startCombo, stopAll,
   }
 }

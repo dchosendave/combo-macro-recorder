@@ -5,7 +5,8 @@ import { Maximize2 } from "lucide-react"
 
 type CompactOverlayProps = {
   elapsed: number
-  activations: number
+  potionsCycles: number
+  skillsCycles: number
   potionsActive: boolean
   skillsActive: boolean
   hotkey: string
@@ -16,7 +17,8 @@ type CompactOverlayProps = {
 
 export function CompactOverlay({
   elapsed,
-  activations,
+  potionsCycles,
+  skillsCycles,
   potionsActive,
   skillsActive,
   hotkey,
@@ -37,20 +39,17 @@ export function CompactOverlay({
         {profileName && (
           <span className="text-xs text-muted-foreground">· {profileName}</span>
         )}
-        <span className="text-xs text-muted-foreground">
-          {activations} cycles
-        </span>
       </div>
 
       <div className="flex items-center gap-1.5">
         <span
           className={`size-1.5 rounded-full transition-colors duration-300 ${potionsActive ? "bg-green-400" : "bg-muted-foreground/50"}`}
         />
-        <span className="text-xs text-muted-foreground">Potions</span>
+        <span className="text-xs text-muted-foreground">Potions {potionsCycles}</span>
         <span
           className={`size-1.5 rounded-full transition-colors duration-300 ${skillsActive ? "bg-green-400" : "bg-muted-foreground/50"}`}
         />
-        <span className="text-xs text-muted-foreground">Skills</span>
+        <span className="text-xs text-muted-foreground">Skills {skillsCycles}</span>
       </div>
 
       <div className="flex-1" />

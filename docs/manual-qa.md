@@ -72,6 +72,7 @@ Use this checklist before a release or after changes to Windows integration, lay
 - [ ] Stop immediately after Start and run very short Repeat-N combos; late compact entry must not leave a stopped overlay.
 - [ ] Repeat enter/exit at 125%, 150%, and 200% scaling; the original physical window size must remain unchanged.
 - [ ] Confirm compact mode in every configured corner and `auto`.
+- [ ] Compact mode reports separate Potion and Skill cycle counts when either or both channels run.
 - [ ] Compact bar is always on top, square-cornered, and fully visible.
 - [ ] Expand Editor restores the window while playback continues.
 - [ ] Active enabled step highlights and auto-scrolls in List and Timeline.
