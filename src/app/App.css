@@ -153,6 +153,14 @@
   background: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
 }
 
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 @supports not selector(::-webkit-scrollbar) {
   * {
     scrollbar-width: thin;

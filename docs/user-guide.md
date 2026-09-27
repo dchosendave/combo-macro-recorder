@@ -29,6 +29,8 @@ The picker exposes letters, numbers, common keys, and F1–F12. Imported and pre
 
 Unsupported or empty keys block Run. A KeyDown without a later matching KeyUp shows a warning but remains runnable because intentional holds are valid.
 
+The Skills editor is always available. **Run skills** only includes or excludes the configured channel from playback; turning it off never hides or deletes its steps.
+
 ### List and Timeline views
 
 List view is the step editor. Timeline view is a read-only visualization of cumulative timing and proportional delay blocks; switch back to List view to add, select, reorder, or change steps.
@@ -43,6 +45,8 @@ List view is the step editor. Timeline view is a read-only visualization of cumu
 - Ctrl+Up and Ctrl+Down move the selected block.
 
 While the editor is unlocked, drag anywhere on a row's non-interactive surface to reorder it. Inputs, key pickers, and action buttons remain reserved for editing. Dragging one row in a multi-selection moves the selected rows together.
+
+List view uses a dense command grid with fixed Type, Value, and Actions columns. The header stays visible while the rows scroll; key and delay values remain editable inline. The compact **View** menu switches between List and Timeline and chooses text or icon step labels.
 
 The compact selection bar opens an inspector where you can duplicate, copy, cut, paste, delete, enable/disable, or adjust selected delays. Pasted and duplicated steps receive new identities.
 
@@ -76,7 +80,7 @@ Each named profile has a shortcut, run mode, and combo-file assignment:
 - **Stop only** — stops the current macro.
 - **Cycle** — advances through an ordered list of combo files and wraps.
 
-Cycle mode skips unavailable files and warns. Click a profile row to expand its combo assignment; other profiles remain summarized. Shortcut editing checks profile and emergency-stop conflicts. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness. New profiles start without a shortcut. Numpad shortcuts remain distinct from top-row digits.
+Cycle mode skips unavailable files and warns. Hotkeys appear in one flat, divided list rather than separate cards; rows are numbered `Hotkey 1`, `Hotkey 2`, and so on, and show readiness, shortcut, run mode, and combo assignment without requiring selection. Shortcut editing checks profile and emergency-stop conflicts. The Hotkeys page reports registration progress/failure, conflicts, unavailable assigned files, and each profile's readiness. New profiles start without a shortcut. Numpad shortcuts remain distinct from top-row digits.
 
 ## Running and stopping
 

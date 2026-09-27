@@ -137,8 +137,8 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-2 content-start overflow-y-auto p-2 text-[13px] [&_label]:text-[13px]">
-        <section className="flex flex-col gap-2 pr-4">
+    <div className="grid h-full min-h-0 min-w-0 grid-cols-2 content-start overflow-x-hidden overflow-y-auto p-2 text-[13px] [&_label]:text-[13px]">
+        <section className="flex min-w-0 flex-col gap-2 pr-4">
         <h2 className="text-[13px] font-semibold">Window &amp; files</h2>
 
         <div className="flex items-center justify-between gap-4">
@@ -226,7 +226,7 @@ export function SettingsTab({ compactCorner, onSetCompactCorner, autoStop, onSet
 
         </section>
 
-        <section className="flex flex-col gap-2 border-l pl-4">
+        <section className="flex min-w-0 flex-col gap-2 border-l pl-4">
         <h2 className="text-[13px] font-semibold">Automation</h2>
 
         <div className="flex items-center justify-between gap-4">

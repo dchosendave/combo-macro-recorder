@@ -66,7 +66,7 @@ running a short combo possible without navigating a large dashboard.
 | Skills editor | Playback and repeat controls permanently consumed editor height; rows were tall | Compact rows, inline channel switches, Playback popover, and the step list receives remaining height |
 | Step dragging | Whole-row dragging existed but the handle implied a handle-only target | Non-interactive row space has grab feedback; inputs/buttons remain protected; drag state and insertion feedback are clearer |
 | Potions | Q/W/E/R used a two-column grid and generous vertical spacing | All four keys share one compact row with tighter duration/repeat controls |
-| Hotkeys | Every profile displayed its assignment editor | Only the selected profile expands; other profiles remain summarized |
+| Hotkeys | Dense unlabeled rows hid assignment details until selected | One flat, divided list now numbers hotkeys sequentially and presents shortcut, run mode, combo, and status immediately |
 | Settings | One long list inside nested cards with a narrow process picker | Flat two-column Window & files / Automation layout, full-width Safety section, dividers, and a wider two-line searchable process picker |
 | Visual hierarchy | Nested page cards, mixed content sizes, and pill shapes on most controls | Flat tab surfaces, consistent 13 px content type, soft rectangles for actions/inputs, and pills reserved for state |
 

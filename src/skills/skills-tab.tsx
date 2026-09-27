@@ -7,7 +7,6 @@ import { Label } from "@/shared/components/ui/label"
 import { Input } from "@/shared/components/ui/input"
 import { Button } from "@/shared/components/ui/button"
 import { Slider } from "@/shared/components/ui/slider"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select"
 import { RepeatModeControl } from "@/shared/components/repeat-mode-control"
 import {
   Tooltip,
@@ -387,47 +386,49 @@ export function SkillsTab({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden text-[13px] [&_button]:text-[13px] [&_input]:text-[13px] [&_label]:text-[13px]">
         <div className="flex shrink-0 items-center gap-5">
           <label className="flex items-center gap-2 text-sm" htmlFor="enable-skills">
-            Skills <Switch id="enable-skills" checked={enabled} onCheckedChange={setEnabled} />
+            Run skills <Switch id="enable-skills" checked={enabled} onCheckedChange={setEnabled} />
           </label>
-          {enabled && (
-            <label className="flex items-center gap-2 text-sm" htmlFor="hold-right-click">
-              Hold right-click <Switch id="hold-right-click" checked={holdRightClick} onCheckedChange={setHoldRightClick} />
-            </label>
-          )}
+          <label className="flex items-center gap-2 text-sm" htmlFor="hold-right-click">
+            Hold right-click <Switch id="hold-right-click" checked={holdRightClick} onCheckedChange={setHoldRightClick} />
+          </label>
+          {!enabled && <span className="text-xs text-muted-foreground">Excluded from playback</span>}
         </div>
 
-        {enabled ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden animate-in fade-in-0 slide-in-from-top-2 duration-200">
-            {/* Row 1: Labels, actions, and lock */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+            {/* Row 1: View, playback, actions, and lock */}
             <div className="flex items-center gap-1.5">
-              {editorView === "list" && (
-                <>
-                  <span className="text-xs text-muted-foreground">Labels:</span>
-                  <Select value={labelStyle} onValueChange={(v) => setLabelStyle(v as StepLabelStyle)}>
-                    <SelectTrigger className="h-7 w-[120px] text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                  <SelectItem value="abbreviation">KD / KU / DL</SelectItem>
-                  <SelectItem value="icon">↓ / ↑ / ⏱</SelectItem>
-                </SelectContent>
-              </Select>
-                </>
-              )}
-
-              <span className="text-xs text-muted-foreground">View:</span>
-              <Select value={editorView} onValueChange={(value) => {
-                if (!value) return
-                const view = value as "list" | "timeline"
-                setEditorView(view)
-                localStorage.setItem("combo-macro-skill-editor-view", view)
-              }}>
-                <SelectTrigger className="h-7 w-[92px] text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="list">List view</SelectItem>
-                  <SelectItem value="timeline">Timeline</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <Popover>
+                <PopoverTrigger render={<Button size="sm" variant="outline" className="h-7 text-xs">View · {editorView === "list" ? "List" : "Timeline"}</Button>} />
+                <PopoverContent align="start" className="w-56 gap-3 p-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Layout</Label>
+                    <div className="grid grid-cols-2 gap-1">
+                      {(["list", "timeline"] as const).map((view) => (
+                        <Button
+                          key={view}
+                          type="button"
+                          size="xs"
+                          variant={editorView === view ? "secondary" : "ghost"}
+                          aria-pressed={editorView === view}
+                          onClick={() => {
+                            setEditorView(view)
+                            localStorage.setItem("combo-macro-skill-editor-view", view)
+                          }}
+                        >
+                          {view === "list" ? "List" : "Timeline"}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Step labels</Label>
+                    <div className="grid grid-cols-2 gap-1">
+                      <Button type="button" size="xs" variant={labelStyle === "abbreviation" ? "secondary" : "ghost"} aria-pressed={labelStyle === "abbreviation"} onClick={() => setLabelStyle("abbreviation")}>KD / KU / DL</Button>
+                      <Button type="button" size="xs" variant={labelStyle === "icon" ? "secondary" : "ghost"} aria-pressed={labelStyle === "icon"} onClick={() => setLabelStyle("icon")}>↓ / ↑ / ⏱</Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               <Popover>
                 <PopoverTrigger render={<Button size="sm" variant="outline" className="h-7 text-xs">Playback · {repeatMode === "loop" ? "Loop" : `${repeatCount || 0}×`} · {effectivePlaybackSpeed.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}×</Button>} />
@@ -687,36 +688,21 @@ export function SkillsTab({
             {editorView === "list" ? (
             <div
               ref={scrollRef}
-              className="flex-1 min-h-0 overflow-y-auto scroll-smooth rounded-lg border p-1"
+              className="scrollbar-hidden flex-1 min-h-0 overflow-y-auto scroll-smooth rounded-md border"
               onKeyDown={handleStepListKeyDown}
               tabIndex={0}
             >
               {steps.length > 0 ? (
-                <div className="flex flex-col gap-0.5">
+                <div className="min-w-[420px]">
+                  <div className="sticky top-0 z-10 grid h-6 grid-cols-[20px_64px_minmax(0,1fr)_104px] items-center border-b bg-muted/80 px-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm">
+                    <span />
+                    <span>Type</span>
+                    <span>Value</span>
+                    <span className="text-right">Actions</span>
+                  </div>
                   {steps.map((step, i) => (
-                    <div key={step.id} className="flex gap-2">
-                      <div className="flex shrink-0 flex-col items-center pt-2">
-                        <div
-                          className={`w-px flex-1 rounded-full transition-colors ${
-                            i === 0 ? "bg-transparent" : "bg-border"
-                          }`}
-                        />
-                        <div
-                          className={`mt-0.5 mb-0.5 size-2.5 shrink-0 rounded-full border-2 border-border ${
-                            step.type === "keydown"
-                              ? "bg-blue-400"
-                              : step.type === "keyup"
-                                ? "bg-amber-400"
-                                : "bg-muted-foreground"
-                          }`}
-                        />
-                        <div
-                          className={`w-px flex-1 rounded-full transition-colors ${
-                            i === steps.length - 1 ? "bg-transparent" : "bg-border"
-                          }`}
-                        />
-                      </div>
                       <div
+                        key={step.id}
                         data-step-row
                         data-step-id={step.id}
                         draggable={!locked}
@@ -739,7 +725,7 @@ export function SkillsTab({
                         onDragOver={(e) => handleRowDragOver(e, step.id)}
                         onDrop={(e) => handleRowDrop(e, step.id)}
                         onDragEnd={clearDrag}
-                        className={`flex min-h-8 flex-1 items-center gap-1 rounded-md border px-2 py-0.5 transition-colors animate-in fade-in-0 slide-in-from-left-2 duration-200 ${locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"} ${step.disabled ? "opacity-40" : ""} ${activeRunStepId === step.id ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/40" : ""} ${
+                        className={`grid h-7 grid-cols-[20px_64px_minmax(0,1fr)_104px] items-center border-b px-1 transition-colors last:border-b-0 ${locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"} ${step.disabled ? "opacity-40" : ""} ${activeRunStepId === step.id ? "bg-emerald-500/10 ring-1 ring-inset ring-emerald-500" : ""} ${
                           draggingId === step.id ? "scale-[0.99] opacity-60 shadow-md" : ""
                         } ${
                           dragOverId === step.id
@@ -749,26 +735,25 @@ export function SkillsTab({
                             : ""
                         } ${
                           selectedIds.has(step.id)
-                            ? "border-primary bg-primary/10 ring-1 ring-primary"
+                            ? "bg-primary/10 ring-1 ring-inset ring-primary"
                             : "hover:bg-muted/50"
                         }`}
                       >
-                        {!locked && (
-                          <span
-                            className="pointer-events-none flex shrink-0 items-center text-muted-foreground"
-                            aria-label="Drag to reorder"
-                            title="Drag anywhere on the row to reorder"
-                          >
-                            <GripVertical className="size-3.5" />
-                          </span>
-                        )}
+                        <span
+                          className="pointer-events-none flex items-center justify-center text-muted-foreground"
+                          aria-label="Drag to reorder"
+                          title={locked ? undefined : "Drag anywhere on the row to reorder"}
+                        >
+                          {!locked && <GripVertical className="size-3" />}
+                        </span>
 
-                        <span className="w-8 shrink-0 text-center text-[13px] font-medium text-muted-foreground">
+                        <span className={`text-xs font-medium ${step.type === "keydown" ? "text-blue-600 dark:text-blue-400" : step.type === "keyup" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
                           {labelText(step.type)}
                         </span>
 
-                        {step.type === "delay" ? (
-                          <>
+                        <div className="flex min-w-0 items-center gap-1">
+                          {step.type === "delay" ? (
+                            <>
                             <Input
                               inputMode="numeric"
                               value={step.ms}
@@ -779,23 +764,22 @@ export function SkillsTab({
                                   ms: e.target.value.replace(/[^0-9]/g, ""),
                                 })
                               }
-                              className="h-7 w-20 text-[13px]"
+                              className="h-6 w-20 px-2 text-xs"
                             />
-                            <span className="text-xs text-muted-foreground">ms</span>
-                          </>
-                        ) : (
-                          <SkillKeyPicker
-                            value={step.key}
-                            disabled={locked}
-                            invalid={invalidStepIds.has(step.id)}
-                            onChange={(key) => onUpdateStep(step.id, { key })}
-                          />
-                        )}
-
-                        <div className="flex-1" />
+                              <span className="text-[11px] text-muted-foreground">ms</span>
+                            </>
+                          ) : (
+                            <SkillKeyPicker
+                              value={step.key}
+                              disabled={locked}
+                              invalid={invalidStepIds.has(step.id)}
+                              onChange={(key) => onUpdateStep(step.id, { key })}
+                            />
+                          )}
+                        </div>
 
                         {!locked && (
-                          <>
+                          <div className="flex justify-end">
                             <Tooltip>
                               <TooltipTrigger
                                 render={
@@ -875,10 +859,9 @@ export function SkillsTab({
                               />
                               <TooltipContent>Remove (Del)</TooltipContent>
                             </Tooltip>
-                          </>
+                          </div>
                         )}
                       </div>
-                    </div>
                   ))}
                 </div>
               ) : (
@@ -899,12 +882,7 @@ export function SkillsTab({
               />
             )}
 
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Turn on to configure skill keys.
-          </p>
-        )}
+        </div>
       </div>
 
       <AlertDialog open={showClearConfirm}>

@@ -179,9 +179,8 @@ function App() {
     })()
   }, [tryAutoLoad, startupChecked, markTutorialSeen])
 
-  const runningProfileName = runningProfileIdRef.current
-    ? settings.hotkeys.find((p) => p.id === runningProfileIdRef.current)?.name ?? null
-    : null
+  const runningProfileIndex = settings.hotkeys.findIndex((profile) => profile.id === runningProfileIdRef.current)
+  const runningProfileName = runningProfileIndex >= 0 ? `Hotkey ${runningProfileIndex + 1}` : null
 
   const handleStartupOpen = useCallback(async () => {
     const ok = await openFile()

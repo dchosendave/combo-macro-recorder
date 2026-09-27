@@ -47,9 +47,12 @@ Skills, Hotkeys, and Settings. There is no collapsible sidebar. Tab content is
 flat rather than wrapped in page-level cards; borders are reserved for editable
 or selectable regions such as the skill-step list and hotkey profiles.
 
-Skills gives its remaining height to the step list. Playback speed and repeat
-settings live in a toolbar popover, and only the step list scrolls. Hotkey
-profiles remain summarized until selected. Settings uses two columns separated
+Skills gives its remaining height to the step list. List view uses 28 px grid
+rows with a sticky Type/Value/Actions header and inline editors; selection,
+dragging, validation, and playback state are expressed as row highlights.
+Layout and step-label choices share a View popover. Playback speed and repeat
+settings live in a separate toolbar popover, and only the step list scrolls. Hotkey
+profiles are always-visible labeled forms for shortcut, run mode, and combo assignment. Settings uses two columns separated
 by dividers, followed by a full-width Safety section; its process picker displays
 friendly/window names above executable names.
 

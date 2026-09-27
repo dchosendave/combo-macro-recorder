@@ -30,7 +30,7 @@ export function SkillKeyPicker({ value, disabled, invalid, onChange }: SkillKeyP
         variant="outline"
         disabled={disabled}
         aria-invalid={invalid || undefined}
-        className="h-7 min-w-20 justify-start px-2 text-xs aria-invalid:border-destructive"
+        className="h-6 min-w-24 justify-start px-2 text-xs aria-invalid:border-destructive"
         onClick={(event) => { event.stopPropagation(); setOpen(true) }}
       >
         <Keyboard className="size-3" />
