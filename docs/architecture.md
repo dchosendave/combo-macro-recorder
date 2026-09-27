@@ -33,6 +33,30 @@ flowchart LR
 
 All Tauri commands are registered in `src-tauri/src/lib.rs`.
 
+## Desktop UI shell
+
+The normal editor window defaults to `860×620` logical pixels with a `700×560`
+minimum. `useWindowFit` applies that compact size at startup while clamping it to
+the current monitor work area. `html`, `body`, and `#root` are height-locked so the
+document itself cannot scroll into blank space; individual editors and settings
+areas own any required overflow.
+
+The shell uses three fixed horizontal layers above the active tab: the custom
+title bar, the file/run toolbar, and one static navigation row for Potions,
+Skills, Hotkeys, and Settings. There is no collapsible sidebar. Tab content is
+flat rather than wrapped in page-level cards; borders are reserved for editable
+or selectable regions such as the skill-step list and hotkey profiles.
+
+Skills gives its remaining height to the step list. Playback speed and repeat
+settings live in a toolbar popover, and only the step list scrolls. Hotkey
+profiles remain summarized until selected. Settings uses two columns separated
+by dividers, followed by a full-width Safety section; its process picker displays
+friendly/window names above executable names.
+
+Shape semantics are applied centrally in `App.css` through component `data-slot`
+attributes: actions and inputs use 6 px corners, menus/popovers 10 px, and dialogs
+12 px. Pills are reserved for status, switches, and keyboard chips.
+
 ## Flow diagrams
 
 ### Hotkey press pipeline

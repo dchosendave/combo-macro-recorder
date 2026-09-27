@@ -10,6 +10,7 @@ This directory is the maintained reference for Hamin Macro Recorder. Prefer the 
 
 ## For maintainers and AI assistants
 
+- [Current project state](current-state.md) - compact cross-conversation handoff and next work.
 - [Implementation summary (2026-09-27)](implementation-summary-2026-09-27.md) - full audit and implementation handoff, verification, artifacts, and next steps.
 - [Functional audit](functional-audit.md) — implemented fixes, verification results, and remaining functionality-first release checks.
 - [Architecture](architecture.md) — ownership, major flows, concurrency, and platform constraints.
