@@ -50,6 +50,35 @@ Overlapping potion/skill keys are rejected rather than adding shared key ownersh
 
 Combo format v4 and older supported import compatibility remain unchanged. The application version remains `1.0.12`; no version bump, commit, push, or release publication was performed.
 
+## Compact UI follow-up
+
+After the functional implementation, the editor shell and all four tabs were
+refined against Jitbit Macro Recorder as a density and workflow reference. The
+goal was not to copy its dated styling, but to make recording, reviewing, and
+running a short combo possible without navigating a large dashboard.
+
+| Area | Previous UI | Implemented UI |
+| --- | --- | --- |
+| Window | Startup forced a responsive 16:9 window as large as `1280×720`, with a `660×720` minimum | Compact `860×620` default and `700×560` minimum, clamped to the monitor work area |
+| Navigation | Collapsible left sidebar with a Combo parent and Potions/Skills children | One static horizontal row: Potions, Skills, Hotkeys, Settings, and Help |
+| Header | Separate icons for every file operation | Run/Stop stays visible; New/Open/Save/Save As/recent files are grouped under File |
+| Scrolling | The WebView document could scroll the entire app into blank space | Root height and overflow are locked; only explicit content regions scroll |
+| Skills editor | Playback and repeat controls permanently consumed editor height; rows were tall | Compact rows, inline channel switches, Playback popover, and the step list receives remaining height |
+| Step dragging | Whole-row dragging existed but the handle implied a handle-only target | Non-interactive row space has grab feedback; inputs/buttons remain protected; drag state and insertion feedback are clearer |
+| Potions | Q/W/E/R used a two-column grid and generous vertical spacing | All four keys share one compact row with tighter duration/repeat controls |
+| Hotkeys | Every profile displayed its assignment editor | Only the selected profile expands; other profiles remain summarized |
+| Settings | One long list inside nested cards with a narrow process picker | Flat two-column Window & files / Automation layout, full-width Safety section, dividers, and a wider two-line searchable process picker |
+| Visual hierarchy | Nested page cards, mixed content sizes, and pill shapes on most controls | Flat tab surfaces, consistent 13 px content type, soft rectangles for actions/inputs, and pills reserved for state |
+
+No runner behavior, IPC contract, combo schema, or persisted setting semantics
+changed during this UI follow-up. User behavior and the new layout checks are
+maintained in [user-guide.md](user-guide.md) and [manual-qa.md](manual-qa.md).
+
+The final UI validation in this follow-up passed `npm run build`, **298 frontend
+tests across 28 files**, and `git diff --check`. The existing Vite warning for the
+main JavaScript chunk above 500 kB remains. Visual checks in the packaged Windows
+WebView, display scaling, installer QA, and real-game input QA remain manual work.
+
 ## Documentation work
 
 The Markdown review covered root documentation, guides under `docs/`, and existing ADRs. Historical ADRs and released changelog entries were preserved.

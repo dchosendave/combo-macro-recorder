@@ -1,8 +1,9 @@
 [package]
 name = "combo-macro-recorder"
 version = "1.0.13"
-description = "A Tauri App"
-authors = ["you"]
+description = "Windows macro recorder for MU Online potion and skill keys"
+authors = ["Lowie Dave Dichoson"]
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

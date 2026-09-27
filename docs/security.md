@@ -64,3 +64,5 @@ Before release:
 - Complete packaged checks in [manual-qa.md](manual-qa.md).
 - Confirm no secrets, telemetry, remote URLs, or unexpected network requests were introduced.
 - Document any new trust boundary or permission here.
+
+CI runs `npm audit --audit-level=high` and RustSec auditing. The repository is MIT licensed; public Windows distribution still requires a separately obtained code-signing certificate to avoid unsigned-installer warnings.

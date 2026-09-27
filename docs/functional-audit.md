@@ -1,6 +1,6 @@
 # Functional audit and implementation - 2026-09-27
 
-Baseline: `25a6aa6`, version `1.0.12`. The initial working tree was clean. The 2026-09-26 audit identified 19 groups of functional defects; the authorized implementation below is present in the working tree. No visual redesign or persisted format change was introduced.
+Baseline: `25a6aa6`, version `1.0.12`. The initial working tree was clean. The 2026-09-26 audit identified 19 groups of functional defects; the implementation was committed in `1ba0aa3`, followed by the compact UI work in `ac63fce`. No persisted format change was introduced.
 
 ## Current state and next steps
 
@@ -35,6 +35,6 @@ Saved-profile execution leaves the editor untouched. Overlapping potion/skill ke
 
 ## Remaining release checks
 
-The [manual QA matrix](manual-qa.md) remains unchecked where physical Windows input, game focus/elevation, native close/dialog behavior, and mixed DPI are required. Unit tests use controlled injectors/IPC and do not establish real game compatibility. No physical recorder CPU probe, external dependency-advisory scan, or live GitHub release/permission check has been performed. Installer creation alone does not prove installer execution or hosted release success.
+The [manual QA matrix](manual-qa.md) remains unchecked where physical Windows input, game focus/elevation, native close/dialog behavior, and mixed DPI are required. Unit tests use controlled injectors/IPC and do not establish real game compatibility. No physical recorder CPU probe or live GitHub release/permission check has been performed. Installer creation alone does not prove installer execution or hosted release success. The npm dependency audit is clean, and CI checks npm and RustSec advisories.
 
-Unused component/dependency cleanup and further bundle reduction remain maintenance follow-ups after physical functionality is verified. No public release or commit was created.
+Unused generated UI components and their dependencies were removed. Further bundle reduction remains a maintenance follow-up after physical functionality is verified. No public release was created.
