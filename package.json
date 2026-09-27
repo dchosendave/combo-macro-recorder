@@ -1,7 +1,7 @@
 {
   "name": "hamin-macro-recorder",
   "private": true,
-  "version": "1.0.13",
+  "version": "1.1.0",
   "author": "Lowie Dave Dichoson",
   "license": "MIT",
   "type": "module",
