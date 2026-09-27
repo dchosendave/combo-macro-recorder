@@ -21,8 +21,14 @@ Use this checklist before a release or after changes to Windows integration, lay
 - [ ] Minimum 700×560 window remains usable; resizing does not clip controls, card borders, or timeline ends.
 - [ ] The app shell never document-scrolls into blank space; only the macro list and intentionally overflowing tab content scroll.
 - [ ] Flat tab layouts have no clipped dividers or unintended nested borders at minimum and default window sizes.
+- [ ] Potions and Settings never show a horizontal scrollbar at minimum, default, or maximized window sizes.
+- [ ] Each Q/W/E/R option toggles exactly once from either its card surface or the switch itself, including keyboard activation.
 - [ ] Actions, inputs, menus, and dialogs use consistent soft rectangles; status badges, switches, and key chips remain pill-shaped.
 - [ ] List and Timeline show the same order and selection.
+- [ ] Turning Run skills off leaves the editor usable, preserves all steps, and excludes the Skills channel from playback.
+- [ ] The dense List header remains visible while scrolling; Type, Value, and Actions columns stay aligned without clipping.
+- [ ] The Skills list scrolls with the wheel, trackpad, and keyboard without showing a scrollbar track.
+- [ ] The View menu switches List/Timeline and text/icon labels without changing the saved choice unexpectedly.
 - [ ] Ctrl/Shift selection, Ctrl+A, Delete, Ctrl+D, block drag, and bulk delay operations work.
 - [ ] Dragging from the row body reorders one or multiple selected steps; inputs, key pickers, and action buttons do not accidentally start a drag.
 - [ ] Copy/cut/paste preserves order and assigns independent steps.
@@ -44,7 +50,7 @@ Use this checklist before a release or after changes to Windows integration, lay
 
 ## Hotkeys and runner
 
-- [ ] Only the selected hotkey profile expands its combo assignment; selecting another profile collapses the previous one.
+- [ ] The flat Hotkeys list numbers rows sequentially (`Hotkey 1`, `Hotkey 2`, …) and immediately shows status plus labeled Shortcut, Run mode, and Combo fields; reordering updates the visible numbers.
 - [ ] Every unlocked skill row drags from its non-interactive surface; inputs and action buttons edit or activate without starting a drag.
 - [ ] The game-process picker is wide enough to distinguish friendly names and executable names at the minimum window size.
 - [ ] Release Hold before file loading/start acknowledgement completes; the macro must remain stopped.

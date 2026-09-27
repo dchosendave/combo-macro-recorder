@@ -16,6 +16,9 @@ Validate the completed functional and compact-UI work on Windows, fix any reprod
 - The consequential profile-execution and key-ownership decisions are recorded in [ADR 0005](decisions/0005-profile-execution-and-key-ownership.md).
 - Unused generated UI primitives and seven unused UI dependencies were removed; the production CSS bundle dropped from 193.66 kB to 92.40 kB.
 - Feature tabs load with the desktop app so their first selection is immediate and has no loading fallback.
+- Skills List view uses a dense 28 px command grid with a sticky header and inline editing.
+- The Skills editor is always visible; Run skills controls playback participation without hiding configuration.
+- Hotkeys use one flat, divided list with sequential row numbers and always-visible labeled fields instead of selection-dependent cards.
 - Package and Rust metadata identify Lowie Dave Dichoson and the repository now carries an MIT license.
 - Application version remains `1.0.12`; no release was published as part of the implementation session.
 

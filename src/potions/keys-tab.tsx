@@ -43,7 +43,7 @@ export function KeysTab({
   repeatError,
 }: KeysTabProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2 text-[13px] [&_button]:text-[13px] [&_input]:text-[13px] [&_label]:text-[13px]">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-2 overflow-x-hidden overflow-y-auto p-2 text-[13px] [&_button]:text-[13px] [&_input]:text-[13px] [&_label]:text-[13px]">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="enable-qwer" className="font-normal">
             Enable QWER keys for auto potions
@@ -62,8 +62,13 @@ export function KeysTab({
                 key={key}
                 role="button"
                 tabIndex={0}
-                onClick={() => togglePotionKey(key)}
+                onClick={(event) => {
+                  const target = event.target as HTMLElement
+                  if (target instanceof HTMLInputElement || target.closest('[data-slot="switch"]')) return
+                  togglePotionKey(key)
+                }}
                 onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault()
                     togglePotionKey(key)
@@ -76,7 +81,6 @@ export function KeysTab({
                 </span>
                 <Switch
                   checked={keys[key]}
-                  onClick={(e) => e.stopPropagation()}
                   onCheckedChange={() => togglePotionKey(key)}
                 />
               </div>
